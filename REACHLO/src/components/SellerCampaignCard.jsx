@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, Pressable, StyleSheet, Modal, Animated, ScrollView } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Animated, ScrollView } from 'react-native';
 import {
   getCampaignImages,
   getCampaignStatusBadge,
@@ -70,7 +70,7 @@ export default function SellerCampaignCard({
   const isActiveStatus = badge?.label === 'ACTIVE';
 
   return (
-    <>
+    <View style={[styles.cardWrapper, menuVisible && styles.cardWrapperMenuOpen]}>
       <Pressable onPressIn={handlePressIn} onPressOut={handlePressOut}>
         <Animated.View
           style={[
@@ -187,14 +187,16 @@ export default function SellerCampaignCard({
       </Pressable>
 
       {/* Actions Bottom Sheet */}
-      <Modal
-        visible={menuVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={closeMenu}
-      >
-        <Pressable style={styles.menuOverlay} onPress={closeMenu}>
-          <Pressable style={styles.menuSheet} onPress={(e) => e.stopPropagation()}>
+      {/* Actions Menu — inline overlay (no Modal to avoid nested-Modal crash on Android APK) */}
+      {menuVisible && (
+        <>
+          {/* Tap-outside-to-close backdrop */}
+          <Pressable
+            style={styles.menuBackdrop}
+            onPress={closeMenu}
+          />
+          {/* Menu panel anchored below the ⋮ button */}
+          <View style={styles.menuPanel}>
             <View style={styles.menuHandle} />
             <Pressable
               style={styles.menuItem}
@@ -214,14 +216,22 @@ export default function SellerCampaignCard({
             <Pressable style={styles.menuCancelBtn} onPress={closeMenu}>
               <Text style={styles.menuCancelText}>Cancel</Text>
             </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
-    </>
+          </View>
+        </>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  cardWrapper: {
+    position: 'relative',
+    zIndex: 1,
+    // overflow must be visible to allow menu panel to extend beyond card bounds
+  },
+  cardWrapperMenuOpen: {
+    zIndex: 200, // elevate above sibling cards when menu is open
+  },
   card: {
     backgroundColor: 'rgba(255,255,255,0.88)',
     borderRadius: 24,
@@ -419,32 +429,46 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
-  // Menu Sheet
-  menuOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
-    justifyContent: 'flex-end',
+  // Menu (inline, no Modal)
+  menuBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: -1000,
+    right: -1000,
+    bottom: -1000,
+    zIndex: 50,
   },
-  menuSheet: {
+  menuPanel: {
+    position: 'absolute',
+    top: 48,   // just below the ⋮ button
+    right: 10,
+    width: 220,
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingBottom: 32,
-    paddingTop: 12,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingBottom: 10,
+    paddingTop: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 16,
+    elevation: 24,
+    zIndex: 100,
+    borderWidth: 1,
+    borderColor: 'rgba(226,232,240,0.9)',
   },
   menuHandle: {
-    width: 48,
-    height: 5,
-    borderRadius: 3,
+    width: 36,
+    height: 4,
+    borderRadius: 2,
     backgroundColor: '#E2E8F0',
     alignSelf: 'center',
-    marginBottom: 20,
+    marginBottom: 12,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 12,
   },
   menuItemText: {
     fontSize: FONT_SIZES.BASE,
@@ -461,15 +485,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
   },
   menuCancelBtn: {
-    marginTop: 12,
-    paddingVertical: 14,
+    marginTop: 6,
+    paddingVertical: 10,
     alignItems: 'center',
     backgroundColor: '#F8FAFC',
-    borderRadius: 14,
+    borderRadius: 10,
   },
   menuCancelText: {
     color: '#64748B',
     fontWeight: FONT_WEIGHTS.SEMIBOLD,
-    fontSize: 15,
+    fontSize: 14,
   },
 });

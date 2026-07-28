@@ -31,13 +31,12 @@ import chatService from '../../services/chatService';
 import API_CONFIG, { resolveMediaUrl } from '../../config/apiConfig';
 import * as FileSystem from 'expo-file-system/legacy';
 import ImageCropModal, { smartCenterCrop } from '../../components/ImageCropModal';
-import MapLocationPicker from '../../components/MapLocationPicker';
 import * as Location from 'expo-location';
 import SellerCampaignCard from '../../components/SellerCampaignCard';
 import CampaignFeedCard from '../../components/CampaignFeedCard';
-import PlacesAutocompleteProxy from '../../components/PlacesAutocompleteProxy';
-import PlacesAdjustMap from '../../components/PlacesAdjustMap';
 import { truncateChipLabel } from '../../constants/campaignCardConstants';
+
+const GOOGLE_PLACES_API_KEY = 'AIzaSyBqi9sSzxZk_uOmzlwESS0HPX5gRz9vnxo';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -49,8 +48,6 @@ const PREMIUM_COLORS = {
   CARD: '#FFFFFF',
   SUCCESS: '#22C55E',
 };
-
-import MapView, { Marker } from 'react-native-maps';
 
 const CATEGORY_MAP = {
   'IT & Technology Services': ['Website Development', 'Mobile App Development', 'UI/UX Design', 'Software Development', 'Cloud Consulting', 'Cybersecurity Services'],
@@ -279,6 +276,51 @@ export default function SellerDashboardScreen({ navigation }) {
     setSelectedCities((prev) => prev.filter((c) => c !== city));
   };
 
+  const handleLocationSearchChange = async (text) => {
+    setLocationSearch(text);
+    if (text.length < 3) { setLocationSuggestions([]); return; }
+    if (!locationSessionToken.current) {
+      locationSessionToken.current = Math.random().toString(36).substring(2);
+    }
+    setLocationSearchLoading(true);
+    try {
+      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(text)}&key=${GOOGLE_PLACES_API_KEY}&sessiontoken=${locationSessionToken.current}&components=country:in&language=en`;
+      const res = await fetch(url);
+      const data = await res.json();
+      setLocationSuggestions(data.predictions || []);
+    } catch (e) {
+      console.warn('Location autocomplete error:', e);
+    } finally {
+      setLocationSearchLoading(false);
+    }
+  };
+
+  const handleSelectLocationSuggestion = async (prediction) => {
+    setLocationSuggestions([]);
+    const placeId = prediction.place_id;
+    const token = locationSessionToken.current;
+    locationSessionToken.current = null;
+    try {
+      const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=geometry,formatted_address&key=${GOOGLE_PLACES_API_KEY}&sessiontoken=${token}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      const result = data.result;
+      if (result?.geometry) {
+        const latitude = result.geometry.location.lat;
+        const longitude = result.geometry.location.lng;
+        const address = result.formatted_address || prediction.description;
+        setLocationAddress(address);
+        setLocationLat(latitude);
+        setLocationLon(longitude);
+        setLocationPlaceId(null);
+        setLocationSelected(true);
+        setLocationSearch('');
+      }
+    } catch (e) {
+      console.warn('Location details error:', e);
+    }
+  };
+
   const toggleAllIndia = () => {
     if (selectedCities.includes(ALL_INDIA_TAG)) {
       setSelectedCities([]);
@@ -313,9 +355,10 @@ export default function SellerDashboardScreen({ navigation }) {
   const [locationLon, setLocationLon] = useState(null);
   const [locationPlaceId, setLocationPlaceId] = useState(null);
   const [locationSelected, setLocationSelected] = useState(false);
-  const [locationPickerVisible, setLocationPickerVisible] = useState(false);
-  const [autocompleteModalVisible, setAutocompleteModalVisible] = useState(false);
-  const [adjustModalVisible, setAdjustModalVisible] = useState(false);
+  const [locationSearch, setLocationSearch] = useState('');
+  const [locationSuggestions, setLocationSuggestions] = useState([]);
+  const [locationSearchLoading, setLocationSearchLoading] = useState(false);
+  const locationSessionToken = useRef(null);
 
   // Animation Refs
   const progressAnim = useRef(new Animated.Value(0)).current;
@@ -1730,34 +1773,50 @@ export default function SellerDashboardScreen({ navigation }) {
                                             </BlurView>
                                           </Pressable>
 
-                                          <Pressable
-                                            onPress={() => setAutocompleteModalVisible(true)}
-                                            style={({ pressed }) => [styles.locationGlassBtn, pressed && styles.locationGlassBtnPressed]}
-                                          >
-                                            <BlurView intensity={60} tint="light" style={styles.locationGlassBtnInner}>
-                                              <Ionicons name="search" size={16} color="#2563EB" style={{ marginRight: 6 }} />
-                                              <Text style={styles.locationGlassBtnText}>Search Business Location</Text>
-                                            </BlurView>
-                                          </Pressable>
                                         </View>
 
-                                        {locationSelected && locationLat && locationLon && (
-                                          <View style={styles.miniMapWrapper}>
-                                            <MapView
-                                              style={styles.miniMap}
-                                              region={{
-                                                latitude: locationLat,
-                                                longitude: locationLon,
-                                                latitudeDelta: 0.002,
-                                                longitudeDelta: 0.002,
-                                              }}
-                                              pointerEvents="none"
-                                            >
-                                              <Marker coordinate={{ latitude: locationLat, longitude: locationLon }} pinColor="#2563EB" />
-                                            </MapView>
+                                        {/* Inline Search Bar */}
+                                        <View style={styles.inlineLocationSearchBar}>
+                                          <Ionicons name="search-outline" size={16} color="#94A3B8" style={{ marginRight: 8 }} />
+                                          <TextInput
+                                            style={styles.inlineLocationSearchInput}
+                                            placeholder="Search business address..."
+                                            placeholderTextColor="#94A3B8"
+                                            value={locationSearch}
+                                            onChangeText={handleLocationSearchChange}
+                                            returnKeyType="search"
+                                          />
+                                          {locationSearchLoading && <ActivityIndicator size="small" color="#2563EB" style={{ marginLeft: 6 }} />}
+                                          {locationSearch.length > 0 && !locationSearchLoading && (
+                                            <Pressable onPress={() => { setLocationSearch(''); setLocationSuggestions([]); }}>
+                                              <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                                            </Pressable>
+                                          )}
+                                        </View>
 
+                                        {/* Suggestions */}
+                                        {locationSuggestions.length > 0 && (
+                                          <View style={styles.inlineLocationSuggestionsList}>
+                                            {locationSuggestions.map((pred) => (
+                                              <Pressable
+                                                key={pred.place_id}
+                                                style={({ pressed }) => [styles.inlineLocationSuggestionItem, pressed && { backgroundColor: '#F0F9FF' }]}
+                                                onPress={() => handleSelectLocationSuggestion(pred)}
+                                              >
+                                                <Ionicons name="location-outline" size={14} color="#2563EB" style={{ marginRight: 8, marginTop: 2 }} />
+                                                <View style={{ flex: 1 }}>
+                                                  <Text style={styles.inlineLocationSuggestionMain} numberOfLines={1}>
+                                                    {pred.structured_formatting?.main_text || pred.description}
+                                                  </Text>
+                                                  <Text style={styles.inlineLocationSuggestionSub} numberOfLines={1}>
+                                                    {pred.structured_formatting?.secondary_text || ''}
+                                                  </Text>
+                                                </View>
+                                              </Pressable>
+                                            ))}
                                           </View>
                                         )}
+
                                       </BlurView>
                                     </View>
                   </View>
@@ -2086,58 +2145,6 @@ export default function SellerDashboardScreen({ navigation }) {
         imageUri={pendingCropUri}
         onCancel={handleCropCancel}
         onConfirm={handleCropConfirm}
-      />
-
-      <MapLocationPicker
-        visible={locationPickerVisible}
-        initialLocation={locationLat && locationLon ? { latitude: locationLat, longitude: locationLon } : null}
-        onClose={() => setLocationPickerVisible(false)}
-        onConfirm={(res) => {
-          setLocationPickerVisible(false);
-          if (res) {
-            setLocationLat(res.latitude);
-            setLocationLon(res.longitude);
-            setLocationAddress(res.address || '');
-            setLocationPlaceId(null);
-            setLocationSelected(true);
-          }
-        }}
-      />
-
-      {/* Autocomplete Modal (optional) - non-intrusive; opens when user taps 'Search Location' */}
-      <Modal visible={autocompleteModalVisible} animationType="slide" onRequestClose={() => setAutocompleteModalVisible(false)}>
-        <PlacesAutocompleteProxy
-          onPlaceSelected={(place) => {
-            if (!place) return;
-            setLocationAddress(place.formatted_address || '');
-            setLocationLat(place.latitude || null);
-            setLocationLon(place.longitude || null);
-            setLocationPlaceId(place.place_id || null);
-            setLocationSelected(true);
-            setAutocompleteModalVisible(false);
-            // Optionally allow manual fine-tuning after selection
-            setAdjustModalVisible(true);
-          }}
-          authToken={null}
-        />
-        <Pressable style={{ padding: 12 }} onPress={() => setAutocompleteModalVisible(false)}>
-          <Text style={{ color: '#2563EB' }}>Close</Text>
-        </Pressable>
-      </Modal>
-
-      <PlacesAdjustMap
-        visible={adjustModalVisible}
-        initialRegion={locationLat && locationLon ? { latitude: locationLat, longitude: locationLon } : null}
-        onClose={() => setAdjustModalVisible(false)}
-        onSave={(coords) => {
-          if (coords) {
-            setLocationLat(coords.latitude);
-            setLocationLon(coords.longitude);
-            setLocationPlaceId(null);
-            setLocationSelected(true);
-          }
-          setAdjustModalVisible(false);
-        }}
       />
 
       {/* LEAD INBOX MODAL */}
@@ -4564,8 +4571,61 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
+  suggestionItemPressed: {
+    backgroundColor: '#F0F9FF',
+  },
   suggestionText: {
     fontSize: FONT_SIZES.SM,
     color: '#0F172A',
+  },
+  
+  // --- INLINE LOCATION SEARCH STYLES ---
+  inlineLocationSearchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: 10,
+  },
+  inlineLocationSearchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#0C1445',
+    padding: 0,
+  },
+  inlineLocationSuggestionsList: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    marginTop: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 6,
+    overflow: 'hidden',
+  },
+  inlineLocationSuggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  inlineLocationSuggestionMain: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0C1445',
+  },
+  inlineLocationSuggestionSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 1,
   },
 });

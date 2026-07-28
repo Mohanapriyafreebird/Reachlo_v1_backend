@@ -20,6 +20,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from '../components/Toast';
 import { useAuth } from '../context/AuthContext';
+import authService from '../services/authService';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -163,13 +164,21 @@ export default function BuyerLoginScreen({ navigation }) {
     setLoading(true);
     try {
       const response = await login(email.trim(), password);
-      if (response.role === 'SELLER') {
-        navigation.replace('SellerDashboard');
-      } else if (response.role === 'ADMIN') {
-        navigation.replace('AdminDashboard');
-      } else {
-        navigation.replace('DiscoveryFeed');
+
+      // ── Role guard: This is the BUYER login screen ───────────────────────
+      // If the backend returns a seller/admin role, the user used wrong login.
+      // We log them out immediately and show a friendly message.
+      if (response.role === 'SELLER' || response.role === 'ADMIN') {
+        await authService.logout(); // clear the stored token
+        showToastMsg(
+          'You are registered as a Seller. Please use the \'Grow Your Business\' login instead.',
+          'error'
+        );
+        return;
       }
+      // ─────────────────────────────────────────────────────────────────────
+
+      navigation.replace('DiscoveryFeed');
     } catch (err) {
       const message = err?.message || 'Invalid email or password';
       showToastMsg(message, 'error');
