@@ -14,6 +14,7 @@ import {
   FlatList,
   Image,
   TextInput,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -21,6 +22,7 @@ import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from '../components/Toast';
 import { useAuth } from '../context/AuthContext';
+import authService from '../services/authService';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -175,12 +177,24 @@ export default function LoginScreen({ navigation }) {
     setLoading(true);
     try {
       const response = await login(email.trim(), password);
+
+      // ── Role guard: This is the SELLER login screen ───────────────────────
+      // If the backend returns a non-seller role, the user used the wrong login.
+      // We log them out immediately and show a friendly message.
+      if (response.role !== 'SELLER' && response.role !== 'ADMIN') {
+        await authService.logout(); // clear the stored token
+        showToastMsg(
+          'You are registered as a Buyer. Please use the \'Explore Amazing Offers\' login instead.',
+          'error'
+        );
+        return;
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
       if (response.role === 'SELLER') {
         navigation.replace('SellerDashboard');
       } else if (response.role === 'ADMIN') {
         navigation.replace('AdminDashboard');
-      } else {
-        navigation.replace('DiscoveryFeed');
       }
     } catch (err) {
       const message = err?.message || 'Invalid email or password';
