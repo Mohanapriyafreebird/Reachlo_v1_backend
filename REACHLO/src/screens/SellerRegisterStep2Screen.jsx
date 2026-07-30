@@ -98,8 +98,9 @@ export default function SellerRegisterStep2Screen({ route, navigation }) {
     Keyboard.dismiss();
     if (!validate()) return;
 
-    // If USP nudge is showing, wait for user to either "Add USP" or "Skip"
-    if (showUspNudge && !uspNudgeDismissed) return;
+    // USP is optional — do NOT block registration if the nudge is showing.
+    // The nudge is purely informational; dismiss it silently and proceed.
+    if (showUspNudge) setShowUspNudge(false);
 
     setLoading(true);
     try {

@@ -59,9 +59,9 @@ const LIVE_MEDIA_BASE_URL = 'https://reachlo-backend.onrender.com';
 const LIVE_WS_BASE_URL = 'wss://reachlo-backend.onrender.com/api';
 
 export const API_CONFIG = {
-  BASE_URL: LIVE_BASE_URL,
-  MEDIA_BASE_URL: LIVE_MEDIA_BASE_URL,
-  WS_BASE_URL: LIVE_WS_BASE_URL,
+  BASE_URL: BASE_URL,
+  MEDIA_BASE_URL: MEDIA_BASE_URL,
+  WS_BASE_URL: WS_BASE_URL,
   TIMEOUT: 60000,
 };
 

@@ -1,6 +1,23 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, Component } from 'react'
 import { Modal, View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native'
-import MapView, { Marker } from 'react-native-maps'
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps'
+
+// Prevent native map crash from propagating upward
+class MapErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { hasError: false }; }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(e) { console.warn('PlacesAdjustMap MapView error:', e?.message); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1F5F9' }}>
+          <Text style={{ color: '#64748B' }}>Map unavailable</Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 /**
  * Non-intrusive modal map for adjusting a place pin.
@@ -39,22 +56,25 @@ export default function PlacesAdjustMap({ visible, initialRegion, onClose, onSav
         <View style={styles.header}>
           <Text style={styles.title}>Adjust Location</Text>
         </View>
-        <MapView
-          ref={mapRef}
-          style={styles.map}
-          region={{
-            latitude: marker.latitude,
-            longitude: marker.longitude,
-            latitudeDelta: initialRegion?.latitudeDelta || 0.002,
-            longitudeDelta: initialRegion?.longitudeDelta || 0.002,
-          }}
-        >
-          <Marker
-            coordinate={{ latitude: marker.latitude, longitude: marker.longitude }}
-            draggable
-            onDragEnd={handleDragEnd}
-          />
-        </MapView>
+        <MapErrorBoundary>
+          <MapView
+            ref={mapRef}
+            provider={PROVIDER_GOOGLE}
+            style={styles.map}
+            region={{
+              latitude: marker.latitude,
+              longitude: marker.longitude,
+              latitudeDelta: initialRegion?.latitudeDelta || 0.002,
+              longitudeDelta: initialRegion?.longitudeDelta || 0.002,
+            }}
+          >
+            <Marker
+              coordinate={{ latitude: marker.latitude, longitude: marker.longitude }}
+              draggable
+              onDragEnd={handleDragEnd}
+            />
+          </MapView>
+        </MapErrorBoundary>
 
         <View style={styles.controls}>
           <TouchableOpacity style={[styles.btn, styles.cancel]} onPress={onClose}>

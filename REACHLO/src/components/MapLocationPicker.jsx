@@ -1,7 +1,24 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, Component } from 'react';
 import { View, Text, Modal, Pressable, TextInput, StyleSheet, Platform, ActivityIndicator, FlatList } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
+
+// Prevent native MapView crash from killing the parent screen
+class MapErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { hasError: false }; }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(e) { console.warn('MapLocationPicker MapView error:', e?.message); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1F5F9', gap: 8 }}>
+          <Text style={{ color: '#64748B' }}>Map unavailable. Location is saved.</Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function MapLocationPicker({ visible, onClose, onConfirm, initialLocation }) {
   const [region, setRegion] = useState(null);
@@ -101,11 +118,20 @@ export default function MapLocationPicker({ visible, onClose, onConfirm, initial
         {loading ? (
           <ActivityIndicator style={{ flex: 1 }} />
         ) : (
-          <MapView style={styles.map} region={region} onPress={handleMapPress} onRegionChangeComplete={setRegion}>
-            {marker && (
-              <Marker coordinate={marker} draggable onDragEnd={(e) => setMarker(e.nativeEvent.coordinate)} />
-            )}
-          </MapView>
+          <MapErrorBoundary>
+            <MapView 
+              provider={PROVIDER_GOOGLE}
+              style={styles.map} 
+              region={region} 
+              onPress={handleMapPress} 
+              onRegionChangeComplete={setRegion} 
+              liteMode={false}
+            >
+              {marker && (
+                <Marker coordinate={marker} draggable onDragEnd={(e) => setMarker(e.nativeEvent.coordinate)} />
+              )}
+            </MapView>
+          </MapErrorBoundary>
         )}
 
         <View style={styles.footer}>

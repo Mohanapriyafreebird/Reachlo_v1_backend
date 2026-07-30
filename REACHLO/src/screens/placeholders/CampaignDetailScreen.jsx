@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, Component } from 'react';
 import {
   View,
   Text,
@@ -12,12 +12,13 @@ import {
   Linking,
   Share,
   FlatList,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
-import MapView, { Marker } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import BusinessVerifiedBadge from '../../components/BusinessVerifiedBadge';
 import CampaignFeedCard, {
   getCampaignImages,
@@ -28,6 +29,80 @@ import CampaignFeedCard, {
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const HERO_HEIGHT = Math.floor(SCREEN_W * 0.75); // 4:3 ratio (W:H)
+
+// ── Error boundary to prevent MapView crash from killing the whole screen ──
+class MapErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error) {
+    console.warn('MapView render error caught by boundary:', error?.message);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={{ height: 180, borderRadius: 20, backgroundColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          <Ionicons name="map-outline" size={32} color="#94A3B8" />
+          <Text style={{ color: '#64748B', fontSize: 13 }}>Map unavailable</Text>
+          {this.props.fallbackUrl ? (
+            <Pressable onPress={() => Linking.openURL(this.props.fallbackUrl)} style={{ backgroundColor: '#2563EB', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Ionicons name="navigate" size={14} color="#fff" />
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Open in Google Maps</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// ── Safe map view: validates coords and wraps in error boundary ────────────
+function SafeMapView({ latitude, longitude }) {
+  const lat = Number(latitude);
+  const lng = Number(longitude);
+  const valid = !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0 && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+
+  const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+
+  if (!valid) {
+    return (
+      <View style={{ height: 180, borderRadius: 20, backgroundColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ color: '#64748B', fontSize: 13 }}>Location not available</Text>
+      </View>
+    );
+  }
+
+  return (
+    <MapErrorBoundary fallbackUrl={mapsUrl}>
+      <View style={styles.mapContainer}>
+        <MapView
+          provider={PROVIDER_GOOGLE}
+          style={styles.map}
+          initialRegion={{ latitude: lat, longitude: lng, latitudeDelta: 0.005, longitudeDelta: 0.005 }}
+          scrollEnabled={false}
+          zoomEnabled={false}
+          pitchEnabled={false}
+          rotateEnabled={false}
+          liteMode={true}
+        >
+          <Marker coordinate={{ latitude: lat, longitude: lng }} pinColor="#2563EB" />
+        </MapView>
+        <Pressable
+          onPress={() => Linking.openURL(mapsUrl)}
+          style={styles.mapOverlayBtn}
+        >
+          <Ionicons name="navigate" size={18} color="#2563EB" />
+          <Text style={styles.mapOverlayText}>Get Directions</Text>
+        </Pressable>
+      </View>
+    </MapErrorBoundary>
+  );
+}
 
 // Parse description into benefit bullet lines
 function parseBenefits(description = '') {
@@ -329,25 +404,10 @@ export default function CampaignDetailScreen({
             {!!campaign.latitude && !!campaign.longitude && (
               <View style={styles.sectionBlock}>
                 <Text style={styles.sectionHeading}>Location</Text>
-                <View style={styles.mapContainer}>
-                  <MapView 
-                    style={styles.map} 
-                    initialRegion={{ latitude: Number(campaign.latitude), longitude: Number(campaign.longitude), latitudeDelta: 0.005, longitudeDelta: 0.005 }} 
-                    scrollEnabled={false} 
-                    zoomEnabled={false}
-                  >
-                    <Marker coordinate={{ latitude: Number(campaign.latitude), longitude: Number(campaign.longitude) }} pinColor="#2563EB" />
-                  </MapView>
-                  <Pressable
-                    onPress={() => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${campaign.latitude},${campaign.longitude}`)}
-                    style={styles.mapOverlayBtn}
-                  >
-                    <Ionicons name="navigate" size={18} color="#2563EB" />
-                    <Text style={styles.mapOverlayText}>Get Directions</Text>
-                  </Pressable>
-                </View>
+                <SafeMapView latitude={campaign.latitude} longitude={campaign.longitude} />
               </View>
             )}
+
 
             {/* TERMS & CONDITIONS (Collapsible) */}
             <View style={styles.sectionBlock}>

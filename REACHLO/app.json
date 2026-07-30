@@ -23,7 +23,12 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.REACHLO"
+      "package": "com.anonymous.REACHLO",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyCTUhkulg26rjK-f6iXpTGLOPmNqyfl5r4"
+        }
+      }
     },
     "extra": {
       "apiHost": "192.168.1.36",

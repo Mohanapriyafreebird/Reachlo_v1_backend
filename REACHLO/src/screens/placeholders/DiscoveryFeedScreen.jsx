@@ -801,7 +801,21 @@ export default function DiscoveryFeedScreen() {
       if (response && response.id) {
         const thread = await chatService.createThread(response.id);
         setSelectedCampaign(null);
-        navigation.navigate('ChatScreen', { threadId: thread.id, campaignId: camp.id });
+        // Pass full campaign + business info so ChatScreen header shows the
+        // actual business name (not the generic fallback "Business")
+        navigation.navigate('ChatScreen', {
+          threadId: thread.id,
+          campaign: {
+            title: camp.title,
+            offer: camp.offerLine,
+            category: camp.category,
+            image_url: camp.image_urls?.[0] || camp.image_url || null,
+          },
+          business: {
+            name: camp.businessName,
+            phone: camp.phone,
+          },
+        });
       }
     } catch (e) {
       console.log(e);

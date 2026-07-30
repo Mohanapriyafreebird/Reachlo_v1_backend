@@ -18,7 +18,7 @@
  *   googleApiKey — Google Places API key
  */
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, Component } from 'react';
 import {
   View,
   Text,
@@ -37,6 +37,32 @@ import COLORS from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/typography';
 
 const GOOGLE_PLACES_API_KEY = 'AIzaSyBqi9sSzxZk_uOmzlwESS0HPX5gRz9vnxo';
+
+// Prevents MapView native crash from killing the whole screen
+class MapErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error) {
+    console.warn('MapView error in BusinessLocationPicker:', error?.message);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={{ height: 180, width: '100%', backgroundColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center', borderRadius: 12, gap: 6 }}>
+          <Ionicons name="map-outline" size={28} color="#94A3B8" />
+          <Text style={{ color: '#64748B', fontSize: 13 }}>Map preview unavailable</Text>
+          <Text style={{ color: '#94A3B8', fontSize: 11, textAlign: 'center', paddingHorizontal: 20 }}>Location is saved. Rebuild the app to enable map preview.</Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function BusinessLocationPicker({ onLocationConfirmed, initialAddress = '' }) {
   const [locationDisplay, setLocationDisplay] = useState(initialAddress);
@@ -307,16 +333,19 @@ export default function BusinessLocationPicker({ onLocationConfirmed, initialAdd
       {/* Map preview card */}
       {mapVisible && mapRegion && (
         <View style={styles.mapCard}>
-          <MapView
-            style={styles.map}
-            region={mapRegion}
-            scrollEnabled={false}
-            zoomEnabled={false}
-            pitchEnabled={false}
-            rotateEnabled={false}
-          >
-            <Marker coordinate={mapMarker} pinColor={COLORS.PRIMARY} />
-          </MapView>
+          <MapErrorBoundary>
+            <MapView
+              style={styles.map}
+              region={mapRegion}
+              scrollEnabled={false}
+              zoomEnabled={false}
+              pitchEnabled={false}
+              rotateEnabled={false}
+              liteMode={true}
+            >
+              <Marker coordinate={mapMarker} pinColor={COLORS.PRIMARY} />
+            </MapView>
+          </MapErrorBoundary>
           <Pressable
             style={({ pressed }) => [styles.confirmBtn, pressed && styles.confirmBtnPressed]}
             onPress={handleConfirmLocation}
