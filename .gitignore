@@ -13,8 +13,6 @@ venv/
 *.sql
 *.pem
 
-# Local uploads (AI-generated images, user uploads)
-backend/uploads/
 
 # Node
 REACHLO/node_modules/

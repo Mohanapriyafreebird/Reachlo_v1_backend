@@ -31,13 +31,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as Location from 'expo-location';
 import COLORS from '../../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../../constants/typography';
 import PrimaryButton from '../../components/PrimaryButton';
 import Toast from '../../components/Toast';
-import BusinessLocationPicker from '../../components/BusinessLocationPicker';
 import apiService from '../../services/apiService';
 import INDIAN_CITIES from '../../constants/indianCities';
+
+const GOOGLE_PLACES_API_KEY = 'AIzaSyBqi9sSzxZk_uOmzlwESS0HPX5gRz9vnxo';
 
 const ALL_INDIA_TAG = 'All over India';
 
@@ -67,6 +69,11 @@ export default function AICampaignGenerateScreen({ navigation }) {
   const [exactPrice, setExactPrice] = useState('');
 
   const [locationData, setLocationData] = useState(null); // { address, latitude, longitude }
+  const [locationSearch, setLocationSearch] = useState('');
+  const [locationSuggestions, setLocationSuggestions] = useState([]);
+  const [locationSearchLoading, setLocationSearchLoading] = useState(false);
+  const [locationGpsLoading, setLocationGpsLoading] = useState(false);
+  const locationSessionToken = useRef(null);
 
   const [loading, setLoading] = useState(false);
   const [loadingStatusIndex, setLoadingStatusIndex] = useState(0);
@@ -153,7 +160,77 @@ export default function AICampaignGenerateScreen({ navigation }) {
     }
   };
 
-  // ── Generate ───────────────────────────────────────────────────────────────
+  // ── Inline Location Picker (no MapView — avoids Android APK crash) ───────────
+
+  const handleLocationGps = async () => {
+    setLocationGpsLoading(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        showToast('Location permission denied. Please search manually.');
+        return;
+      }
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const { latitude, longitude } = loc.coords;
+      // Reverse geocode via Google
+      const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${GOOGLE_PLACES_API_KEY}`;
+      const geoRes = await fetch(geoUrl);
+      const geoData = await geoRes.json();
+      const address = geoData.results?.[0]?.formatted_address || 'Current Location';
+      setLocationData({ address, latitude, longitude });
+      setLocationSearch('');
+      setLocationSuggestions([]);
+    } catch (e) {
+      showToast('Could not get your location. Please search manually.');
+    } finally {
+      setLocationGpsLoading(false);
+    }
+  };
+
+  const handleLocationSearchChange = async (text) => {
+    setLocationSearch(text);
+    if (text.length < 3) { setLocationSuggestions([]); return; }
+    if (!locationSessionToken.current) {
+      locationSessionToken.current = Math.random().toString(36).substring(2);
+    }
+    setLocationSearchLoading(true);
+    try {
+      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(text)}&key=${GOOGLE_PLACES_API_KEY}&sessiontoken=${locationSessionToken.current}&components=country:in&language=en`;
+      const res = await fetch(url);
+      const data = await res.json();
+      setLocationSuggestions(data.predictions || []);
+    } catch (e) {
+      console.warn('Location autocomplete error:', e);
+    } finally {
+      setLocationSearchLoading(false);
+    }
+  };
+
+  const handleSelectLocationSuggestion = async (prediction) => {
+    setLocationSuggestions([]);
+    const placeId = prediction.place_id;
+    const token = locationSessionToken.current;
+    locationSessionToken.current = null;
+    try {
+      const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=geometry,formatted_address&key=${GOOGLE_PLACES_API_KEY}&sessiontoken=${token}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      const result = data.result;
+      if (result?.geometry) {
+        const latitude = result.geometry.location.lat;
+        const longitude = result.geometry.location.lng;
+        const address = result.formatted_address || prediction.description;
+        setLocationData({ address, latitude, longitude });
+        setLocationSearch(address);
+      }
+    } catch (e) {
+      console.warn('Location details error:', e);
+    }
+  };
+
+  // ───────────────────────────────────────────────────────────────────────
+
+  // ── Generate ────────────────────────────────────────────────────────────────────
 
   const handleGenerate = async () => {
     Keyboard.dismiss();
@@ -430,18 +507,80 @@ export default function AICampaignGenerateScreen({ navigation }) {
                   <Text style={styles.helperText}>This will be shown on your campaign card after publishing.</Text>
                 </View>
 
-                {/* Business Location */}
+                {/* Business Location - inline picker (no MapView to avoid Android APK crash) */}
                 <View style={styles.fieldGroup}>
                   <Text style={styles.fieldLabel}>
                     Business Location <Text style={styles.optionalTag}>(optional)</Text>
                   </Text>
                   <Text style={styles.helperText}>Pinpoint your exact location for local buyers.</Text>
-                  <View style={{ marginTop: 8 }}>
-                    <BusinessLocationPicker
-                      onLocationConfirmed={(data) => setLocationData(data)}
-                      initialAddress=""
-                    />
+
+                  {/* GPS + Search buttons */}
+                  <View style={styles.locationBtnsRow}>
+                    <Pressable
+                      style={({ pressed }) => [styles.locationBtn, pressed && { opacity: 0.7 }]}
+                      onPress={handleLocationGps}
+                      disabled={locationGpsLoading}
+                    >
+                      {locationGpsLoading
+                        ? <ActivityIndicator size="small" color={COLORS.PRIMARY} />
+                        : <Ionicons name="locate" size={15} color={COLORS.PRIMARY} style={{ marginRight: 5 }} />
+                      }
+                      <Text style={styles.locationBtnText}>Use Current Location</Text>
+                    </Pressable>
                   </View>
+
+                  {/* Search bar */}
+                  <View style={styles.locationSearchBar}>
+                    <Ionicons name="search-outline" size={15} color={COLORS.TEXT_PLACEHOLDER} style={{ marginRight: 8 }} />
+                    <TextInput
+                      style={styles.locationSearchInput}
+                      placeholder="Search business address..."
+                      placeholderTextColor={COLORS.TEXT_PLACEHOLDER}
+                      value={locationSearch}
+                      onChangeText={handleLocationSearchChange}
+                      returnKeyType="search"
+                    />
+                    {locationSearchLoading && <ActivityIndicator size="small" color={COLORS.PRIMARY} style={{ marginLeft: 6 }} />}
+                    {locationSearch.length > 0 && !locationSearchLoading && (
+                      <Pressable onPress={() => { setLocationSearch(''); setLocationSuggestions([]); }}>
+                        <Ionicons name="close-circle" size={16} color={COLORS.TEXT_PLACEHOLDER} />
+                      </Pressable>
+                    )}
+                  </View>
+
+                  {/* Suggestions */}
+                  {locationSuggestions.length > 0 && (
+                    <View style={styles.locationSuggestionsList}>
+                      {locationSuggestions.map((pred) => (
+                        <Pressable
+                          key={pred.place_id}
+                          style={({ pressed }) => [styles.locationSuggestionItem, pressed && { backgroundColor: '#F0F9FF' }]}
+                          onPress={() => handleSelectLocationSuggestion(pred)}
+                        >
+                          <Ionicons name="location-outline" size={14} color={COLORS.PRIMARY} style={{ marginRight: 8, marginTop: 2 }} />
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.locationSuggestionMain} numberOfLines={1}>
+                              {pred.structured_formatting?.main_text || pred.description}
+                            </Text>
+                            <Text style={styles.locationSuggestionSub} numberOfLines={1}>
+                              {pred.structured_formatting?.secondary_text || ''}
+                            </Text>
+                          </View>
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
+
+                  {/* Confirmed location display */}
+                  {locationData && (
+                    <View style={styles.locationConfirmedBox}>
+                      <Ionicons name="checkmark-circle" size={15} color={COLORS.SUCCESS} style={{ marginRight: 6 }} />
+                      <Text style={styles.locationConfirmedText} numberOfLines={2}>{locationData.address}</Text>
+                      <Pressable onPress={() => { setLocationData(null); setLocationSearch(''); }}>
+                        <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                      </Pressable>
+                    </View>
+                  )}
                 </View>
 
               </View>
@@ -644,4 +783,92 @@ const styles = StyleSheet.create({
     color: COLORS.TEXT_PRIMARY,
   },
   generateBtn: { marginTop: 40, backgroundColor: '#1A73E8', height: 56 },
+
+  // ── Inline Location Picker ──────────────────────────────────────────────
+  locationBtnsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  locationBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  locationBtnText: {
+    fontSize: FONT_SIZES.SM,
+    color: COLORS.PRIMARY,
+    fontWeight: FONT_WEIGHTS.SEMIBOLD,
+  },
+  locationSearchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    marginBottom: 6,
+  },
+  locationSearchInput: {
+    flex: 1,
+    fontSize: FONT_SIZES.SM,
+    color: COLORS.TEXT_PRIMARY,
+    padding: 0,
+  },
+  locationSuggestionsList: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 6,
+    overflow: 'hidden',
+  },
+  locationSuggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  locationSuggestionMain: {
+    fontSize: FONT_SIZES.SM,
+    fontWeight: FONT_WEIGHTS.SEMIBOLD,
+    color: COLORS.TEXT_PRIMARY,
+  },
+  locationSuggestionSub: {
+    fontSize: FONT_SIZES.XS,
+    color: COLORS.TEXT_SECONDARY,
+    marginTop: 1,
+  },
+  locationConfirmedBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: 4,
+  },
+  locationConfirmedText: {
+    flex: 1,
+    fontSize: FONT_SIZES.SM,
+    color: '#15803D',
+    fontWeight: FONT_WEIGHTS.MEDIUM,
+  },
 });

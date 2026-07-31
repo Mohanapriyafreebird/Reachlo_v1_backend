@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import COLORS from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS, LINE_HEIGHTS } from '../constants/typography';
 import { useAuth } from '../context/AuthContext';
+import API_CONFIG from '../config/apiConfig';
 
 const { width, height } = Dimensions.get('window');
 
@@ -111,8 +112,14 @@ export default function SplashScreen({ navigation }) {
   const [timerDone, setTimerDone] = useState(false);
   const [showButtons, setShowButtons] = useState(false);
 
-  // Step 1: Entry animations
+  // Step 1: Entry animations + backend wakeup ping
   useEffect(() => {
+    // ── Fire-and-forget backend wakeup ping ──────────────────────────────────
+    // Render.com free tier cold-starts in 30-60s. By pinging /health during
+    // the splash animation, the backend is warm before the user tries to login.
+    fetch(`${API_CONFIG.BASE_URL}/health`, { method: 'GET' }).catch(() => {});
+    // ────────────────────────────────────────────────────────────────────────
+
     // Background settle
     Animated.timing(bgScale, {
       toValue: 1,
