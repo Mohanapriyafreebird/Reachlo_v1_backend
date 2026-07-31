@@ -48,7 +48,8 @@
           "icon": "./assets/icon.png",
           "color": "#ffffff"
         }
-      ]
+      ],
+      "expo-font"
     ],
     "owner": "mohanapriyafreebird"
   }
