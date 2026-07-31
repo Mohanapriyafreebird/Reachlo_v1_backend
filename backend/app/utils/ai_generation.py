@@ -405,11 +405,16 @@ def _call_gemini(
     if not api_key:
         raise ValueError("GEMINI_API_KEY is not configured")
 
+    # Priority order — 2.5-pro is the pro model, but it often hits 429 rate limits.
+    # 3.6-flash and flash-latest are highly reliable (return 200).
     models_to_try = [
-        "gemini-2.5-flash",
+        "gemini-2.5-pro",
+        "gemini-3.1-pro-preview",
+        "gemini-3.6-flash",
+        "gemini-flash-latest",
         "gemini-2.0-flash",
-        "gemini-2.5-flash-lite",
-        "gemini-flash-latest"
+        "gemini-2.0-flash-lite",
+        "gemini-flash-lite-latest",
     ]
 
     contents = [{"role": "user", "parts": [{"text": prompt}]}]
@@ -1520,12 +1525,14 @@ def generate_image_with_gemini(
     if not api_key:
         return None
 
-    # Image-capable Gemini models (priority order)
+    # Image-capable Gemini models (priority order — all confirmed available for this API key)
     image_models = [
         "gemini-2.5-flash-image",
         "gemini-3.1-flash-image",
         "gemini-3.1-flash-image-preview",
+        "gemini-3.1-flash-lite-image",
         "gemini-3-pro-image",
+        "gemini-3-pro-image-preview",
     ]
 
     os.makedirs(save_dir, exist_ok=True)
@@ -1599,75 +1606,82 @@ def generate_campaign_image(
 
     # ── Attempt 2: Ideogram v2 ────────────────────────────────────────────────
     api_key = settings.IDEOGRAM_API_KEY
-    if not api_key:
-        raise ValueError("IDEOGRAM_API_KEY is not configured in .env")
 
-    os.makedirs(save_dir, exist_ok=True)
-    filename = f"{uuid.uuid4().hex}.png"
-    filepath = os.path.join(save_dir, filename)
+    # Quick pre-check: skip Ideogram if key is missing
+    _ideogram_skip = not api_key
 
-    neg = negative_prompt or FLUX_NEGATIVE_PROMPT
+    if not _ideogram_skip:
+        os.makedirs(save_dir, exist_ok=True)
+        filename = f"{uuid.uuid4().hex}.png"
+        filepath = os.path.join(save_dir, filename)
 
-    url = "https://api.ideogram.ai/generate"
-    headers = {
-        "Api-Key": api_key,
-        "Content-Type": "application/json",
-    }
+        neg = negative_prompt or FLUX_NEGATIVE_PROMPT
 
-    payload = {
-        "image_request": {
-            "prompt": full_prompt,
-            "negative_prompt": neg,
-            "model": "V_2",
-            "aspect_ratio": "ASPECT_4_3",
-            "style_type": "REALISTIC",
-            "magic_prompt_option": "ON",
-            "num_images": 1,
+        url = "https://api.ideogram.ai/generate"
+        headers = {
+            "Api-Key": api_key,
+            "Content-Type": "application/json",
         }
-    }
 
-    print(f"[INFO] Calling Ideogram v2 | prompt_len={len(full_prompt)} chars  ")
-    print(f"[INFO] Ideogram prompt preview: {full_prompt[:200]}...")
+        payload = {
+            "image_request": {
+                "prompt": full_prompt,
+                "negative_prompt": neg,
+                "model": "V_2",
+                "aspect_ratio": "ASPECT_4_3",
+                "style_type": "REALISTIC",
+                "magic_prompt_option": "ON",
+                "num_images": 1,
+            }
+        }
 
-    response = requests.post(url, json=payload, headers=headers, timeout=180)
+        print(f"[INFO] Calling Ideogram v2 | prompt_len={len(full_prompt)} chars  ")
+        print(f"[INFO] Ideogram prompt preview: {full_prompt[:200]}...")
 
-    if response.status_code != 200:
-        error_text = response.text[:400]
-        if response.status_code in (401, 402):
-            print(f"[WARN] Ideogram API error {response.status_code}: {error_text}. Falling back to free Pollinations AI (Flux).")
-            import urllib.parse
-            encoded_prompt = urllib.parse.quote(full_prompt)
-            fallback_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1344&height=1008&nologo=true"
-            img_response = requests.get(fallback_url, timeout=120)
+        response = requests.post(url, json=payload, headers=headers, timeout=180)
+
+        if response.status_code != 200:
+            error_text = response.text[:400]
+            if response.status_code in (401, 402, 403):
+                # Silently skip to Pollinations if key is invalid (no need to spam warnings on every retry)
+                _ideogram_skip = True  # fall through to Pollinations below
+            else:
+                raise ValueError(f"Ideogram API error {response.status_code}: {error_text}")
+        else:
+            resp_data = response.json()
+            images = resp_data.get("data", [])
+            if not images:
+                raise ValueError(f"Ideogram returned no images. Response: {resp_data}")
+
+            image_url = images[0].get("url")
+            if not image_url:
+                raise ValueError(f"Ideogram image URL missing in response: {images[0]}")
+
+            os.makedirs(save_dir, exist_ok=True)
+            filename = f"{uuid.uuid4().hex}.png"
+            filepath = os.path.join(save_dir, filename)
+            img_response = requests.get(image_url, timeout=120)
             img_response.raise_for_status()
             with open(filepath, "wb") as f:
                 f.write(img_response.content)
             return filepath
-        else:
-            raise ValueError(f"Ideogram API error {response.status_code}: {error_text}")
 
-    resp_data = response.json()
-    images = resp_data.get("data", [])
-    if not images:
-        raise ValueError(f"Ideogram returned no images. Response: {resp_data}")
+    if not api_key:
+        raise ValueError("IDEOGRAM_API_KEY is not configured in .env")
 
-    image_url = images[0].get("url")
-    if not image_url:
-        raise ValueError(f"Ideogram image URL missing in response: {images[0]}")
-
-    img_response = requests.get(image_url, timeout=120)
+    # ── Attempt 3: Pollinations AI (free Flux fallback) ───────────────────────
+    print("[INFO] Falling back to Pollinations AI (Flux) for image generation...")
+    import urllib.parse
+    os.makedirs(save_dir, exist_ok=True)
+    filename = f"{uuid.uuid4().hex}.png"
+    filepath = os.path.join(save_dir, filename)
+    encoded_prompt = urllib.parse.quote(full_prompt)
+    fallback_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1344&height=1008&nologo=true"
+    img_response = requests.get(fallback_url, timeout=120)
     img_response.raise_for_status()
-
-    content_type = img_response.headers.get("content-type", "")
-    if "image" not in content_type:
-        raise ValueError(
-            f"Ideogram image download returned non-image: {content_type} — {img_response.text[:200]}"
-        )
-
     with open(filepath, "wb") as f:
         f.write(img_response.content)
-
-    print(f"[INFO] Ideogram image saved: {filepath} ({len(img_response.content) // 1024} KB)")
+    print(f"[INFO] Pollinations image saved: {filepath} ({len(img_response.content) // 1024} KB)")
     return filepath
 
 

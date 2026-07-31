@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef, Component } from 'react';
 import { View, Text, Modal, Pressable, TextInput, StyleSheet, Platform, ActivityIndicator, FlatList } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 
@@ -101,7 +102,7 @@ export default function MapLocationPicker({ visible, onClose, onConfirm, initial
 
   return (
     <Modal visible={visible} animationType="slide">
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <View style={styles.searchRow}>
           <TextInput placeholder="Search your business" value={query} onChangeText={searchAddress} style={styles.searchInput} />
           <Pressable onPress={() => onClose()} style={styles.cancelBtn}><Text style={styles.cancelText}>Close</Text></Pressable>
@@ -140,7 +141,7 @@ export default function MapLocationPicker({ visible, onClose, onConfirm, initial
           </View>
           <Pressable style={styles.confirmBtn} onPress={handleConfirm}><Text style={styles.confirmText}>Confirm Location</Text></Pressable>
         </View>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }

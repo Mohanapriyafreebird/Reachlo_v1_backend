@@ -81,7 +81,6 @@ function SafeMiniMapView({ latitude, longitude }) {
         pointerEvents="none"
         scrollEnabled={false}
         zoomEnabled={false}
-        liteMode={true}
       >
         <Marker coordinate={{ latitude: lat, longitude: lng }} pinColor="#2563EB" />
       </MapView>
@@ -2143,23 +2142,25 @@ export default function SellerDashboardScreen({ navigation }) {
 
       {/* Autocomplete Modal (optional) - non-intrusive; opens when user taps 'Search Location' */}
       <Modal visible={autocompleteModalVisible} animationType="slide" onRequestClose={() => setAutocompleteModalVisible(false)}>
-        <PlacesAutocompleteProxy
-          onPlaceSelected={(place) => {
-            if (!place) return;
-            setLocationAddress(place.formatted_address || '');
-            setLocationLat(place.latitude || null);
-            setLocationLon(place.longitude || null);
-            setLocationPlaceId(place.place_id || null);
-            setLocationSelected(true);
-            setAutocompleteModalVisible(false);
-            // Optionally allow manual fine-tuning after selection
-            setAdjustModalVisible(true);
-          }}
-          authToken={null}
-        />
-        <Pressable style={{ padding: 12 }} onPress={() => setAutocompleteModalVisible(false)}>
-          <Text style={{ color: '#2563EB' }}>Close</Text>
-        </Pressable>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+          <PlacesAutocompleteProxy
+            onPlaceSelected={(place) => {
+              if (!place) return;
+              setLocationAddress(place.formatted_address || '');
+              setLocationLat(place.latitude || null);
+              setLocationLon(place.longitude || null);
+              setLocationPlaceId(place.place_id || null);
+              setLocationSelected(true);
+              setAutocompleteModalVisible(false);
+              // Optionally allow manual fine-tuning after selection
+              setAdjustModalVisible(true);
+            }}
+            authToken={null}
+          />
+          <Pressable style={{ padding: 12 }} onPress={() => setAutocompleteModalVisible(false)}>
+            <Text style={{ color: '#2563EB' }}>Close</Text>
+          </Pressable>
+        </SafeAreaView>
       </Modal>
 
       <PlacesAdjustMap

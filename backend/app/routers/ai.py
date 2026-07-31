@@ -89,12 +89,32 @@ def _get_draft_or_404(db: Session, draft_id: str, business_id: str) -> AICampaig
     return draft
 
 
+from app.routers.upload import upload_file_persistent
+
 def _image_url_from_path(filepath: str) -> str:
-    """Convert a local file path to a URL-accessible path."""
-    rel = filepath.replace("\\", "/")
-    if not rel.startswith("/"):
-        rel = "/" + rel
-    return rel  # served by FastAPI static mount at /uploads
+    """Convert a local file path to a URL-accessible path, uploading to Cloudinary if configured."""
+    try:
+        with open(filepath, "rb") as f:
+            file_bytes = f.read()
+        file_ext = os.path.splitext(filepath)[1].lower() or ".jpg"
+        
+        # This will return a Cloudinary URL if configured, otherwise falls back to local /uploads/...
+        url = upload_file_persistent(file_bytes, file_ext)
+        
+        # If it returned a Cloudinary URL, we can safely delete the local temp file to save disk space
+        if url.startswith("http"):
+            try:
+                os.remove(filepath)
+            except:
+                pass
+        return url
+    except Exception as e:
+        print(f"[WARN] Failed to upload AI image to persistent storage: {e}")
+        # Fallback to local URL if upload fails entirely
+        rel = filepath.replace("\\", "/")
+        if not rel.startswith("/"):
+            rel = "/" + rel
+        return rel
 
 
 def _get_or_refresh_business_analysis(business: Business, db: Session) -> dict:
