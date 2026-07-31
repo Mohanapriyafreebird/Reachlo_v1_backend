@@ -38,9 +38,17 @@ const getDevHost = () => {
 
 const DEV_HOST = getDevHost();
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL || (FULL_URL_OVERRIDE ? `${FULL_URL_OVERRIDE}/api` : `http://${DEV_HOST}:${PORT}/api`);
+// Production backend URL — used as fallback when EXPO_PUBLIC_API_URL is not set
+// (EAS builds do NOT read the local .env file unless env vars are set in eas.json or EAS dashboard)
+const LIVE_BASE_URL = 'https://reachlo-backend.onrender.com/api';
+const LIVE_MEDIA_BASE_URL = 'https://reachlo-backend.onrender.com';
+const LIVE_WS_BASE_URL = 'wss://reachlo-backend.onrender.com/api';
 
-let MEDIA_BASE_URL = FULL_URL_OVERRIDE ? FULL_URL_OVERRIDE : `http://${DEV_HOST}:${PORT}`;
+// In EAS builds EXPO_PUBLIC_API_URL is undefined unless configured on the EAS dashboard.
+// Fall back to the live Render URL to prevent the APK from hitting localhost (127.0.0.1).
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || (FULL_URL_OVERRIDE ? `${FULL_URL_OVERRIDE}/api` : LIVE_BASE_URL);
+
+let MEDIA_BASE_URL = FULL_URL_OVERRIDE ? FULL_URL_OVERRIDE : LIVE_MEDIA_BASE_URL;
 if (process.env.EXPO_PUBLIC_API_URL) {
   MEDIA_BASE_URL = process.env.EXPO_PUBLIC_API_URL.replace(/\/api\/?$/, '');
 }
@@ -51,12 +59,6 @@ const WS_BASE_URL = BASE_URL.replace(/^http/, 'ws');
 if (__DEV__) {
   console.log('[REACHLO] API base URL:', BASE_URL);
 }
-
-// NOTE: If using a PHYSICAL device with Expo Go, replace DEV_HOST 
-// below with your computer's local Wi-Fi IP address (e.g. '192.168.1.100')
-const LIVE_BASE_URL = 'https://reachlo-backend.onrender.com/api';
-const LIVE_MEDIA_BASE_URL = 'https://reachlo-backend.onrender.com';
-const LIVE_WS_BASE_URL = 'wss://reachlo-backend.onrender.com/api';
 
 export const API_CONFIG = {
   BASE_URL: BASE_URL,
