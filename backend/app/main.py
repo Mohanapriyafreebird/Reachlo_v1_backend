@@ -52,5 +52,10 @@ def read_root():
         "database": "MySQL Connected"
     }
 
+@app.get("/api/health")
+def health_check():
+    """Health check endpoint polled by the mobile app on startup."""
+    return {"status": "ok", "service": "REACHLO API"}
+
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

@@ -34,7 +34,7 @@
       "apiHost": "192.168.1.36",
       "apiUrl": "",
       "eas": {
-        "projectId": "61a638e0-8e02-4dce-8767-ea0ad5b8bc95"
+        "projectId": "509588c9-ed05-4028-bbf2-63040f2da709"
       }
     },
     "web": {
@@ -51,6 +51,6 @@
       ],
       "expo-font"
     ],
-    "owner": "mohanapriyafreebird"
+    "owner": "mohana_2006"
   }
 }

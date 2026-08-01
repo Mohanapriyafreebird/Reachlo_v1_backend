@@ -27,6 +27,7 @@ class UserRegister(BaseModel):
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+    requested_role: Optional[str] = None  # BUYER or SELLER — validated server-side to enforce portal isolation
 
 class UserResponse(BaseModel):
     id: str
@@ -138,6 +139,7 @@ class CampaignResponse(BaseModel):
     cta_type: Optional[str] = None
     cta_value: Optional[str] = None
     category: Optional[str] = None
+    sub_category: Optional[str] = None  # Subcategory from business profile (e.g. "Gyms", "Salons")
     target_audience: Optional[str] = None
     target_cities: Optional[str] = None
     price: Optional[float] = None
@@ -156,6 +158,8 @@ class CampaignResponse(BaseModel):
     business_name: Optional[str] = None
     business_verified: Optional[bool] = False
     ai_generated: Optional[bool] = False
+    seller_phone: Optional[str] = None
+    seller_whatsapp: Optional[str] = None
 
     class Config:
         from_attributes = True

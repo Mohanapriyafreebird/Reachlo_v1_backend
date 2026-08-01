@@ -43,8 +43,8 @@ export const AuthProvider = ({ children }) => {
     bootstrapAsync();
   }, []);
 
-  const login = async (email, password) => {
-    const response = await authService.login({ email, password });
+  const login = async (email, password, requested_role) => {
+    const response = await authService.login({ email, password, requested_role });
     setToken(response.token);
     setRole(response.role);
     setUser(response.user);
@@ -72,6 +72,13 @@ export const AuthProvider = ({ children }) => {
   };
 
 
+  const clearAuth = async () => {
+    await authService.logout();
+    setToken(null);
+    setRole(null);
+    setUser(null);
+  };
+
   const updateUserProfile = (newDetails) => {
     setUser(prev => prev ? { ...prev, ...newDetails } : prev);
   };
@@ -86,6 +93,7 @@ export const AuthProvider = ({ children }) => {
         login,
         register,
         logout,
+        clearAuth,
         updateUserProfile,
       }}
     >

@@ -29,13 +29,16 @@ import { useAuth } from '../../context/AuthContext';
 import apiService from '../../services/apiService';
 import chatService from '../../services/chatService';
 import API_CONFIG, { resolveMediaUrl } from '../../config/apiConfig';
-// expo-file-system removed (unused in this file)
+import * as FileSystem from 'expo-file-system/legacy';
 import ImageCropModal, { smartCenterCrop } from '../../components/ImageCropModal';
 import * as Location from 'expo-location';
 import SellerCampaignCard from '../../components/SellerCampaignCard';
 import CampaignFeedCard from '../../components/CampaignFeedCard';
 import { truncateChipLabel } from '../../constants/campaignCardConstants';
+import PlacesAutocompleteProxy from '../../components/PlacesAutocompleteProxy';
+import PlacesAdjustMap from '../../components/PlacesAdjustMap';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapLocationPicker from '../../components/MapLocationPicker';
 
 const GOOGLE_PLACES_API_KEY = 'AIzaSyBqi9sSzxZk_uOmzlwESS0HPX5gRz9vnxo';
 
@@ -406,6 +409,9 @@ export default function SellerDashboardScreen({ navigation }) {
   const [locationSuggestions, setLocationSuggestions] = useState([]);
   const [locationSearchLoading, setLocationSearchLoading] = useState(false);
   const locationSessionToken = useRef(null);
+  const [locationPickerVisible, setLocationPickerVisible] = useState(false);
+  const [autocompleteModalVisible, setAutocompleteModalVisible] = useState(false);
+  const [adjustModalVisible, setAdjustModalVisible] = useState(false);
 
   // Animation Refs
   const progressAnim = useRef(new Animated.Value(0)).current;
@@ -473,6 +479,47 @@ export default function SellerDashboardScreen({ navigation }) {
       loadDashboardData();
     }, [])
   );
+
+  // ── New Message Notification (10-second popup on login) ─────────────────
+  const [sellerMsgNotifVisible, setSellerMsgNotifVisible] = useState(false);
+  const [sellerMsgNotifCount, setSellerMsgNotifCount] = useState(0);
+  const sellerMsgNotifAnim = useRef(new Animated.Value(0)).current;
+  const sellerMsgNotifTimer = useRef(null);
+
+  const showSellerMsgNotif = (count) => {
+    setSellerMsgNotifCount(count);
+    setSellerMsgNotifVisible(true);
+    Animated.spring(sellerMsgNotifAnim, { toValue: 1, useNativeDriver: true, tension: 60, friction: 8 }).start();
+    sellerMsgNotifTimer.current = setTimeout(() => dismissSellerMsgNotif(), 10000);
+  };
+
+  const dismissSellerMsgNotif = () => {
+    if (sellerMsgNotifTimer.current) clearTimeout(sellerMsgNotifTimer.current);
+    Animated.timing(sellerMsgNotifAnim, { toValue: 0, duration: 250, useNativeDriver: true }).start(() => {
+      setSellerMsgNotifVisible(false);
+    });
+  };
+
+  useEffect(() => {
+    if (!user?.email) return;
+    const checkSellerMessages = async () => {
+      try {
+        const threads = await chatService.getThreads();
+        const unreadThreads = (threads || []).filter(t => (t.seller_unread_count || 0) > 0);
+        if (unreadThreads.length === 0) return;
+        const totalUnread = unreadThreads.reduce((sum, t) => sum + (t.seller_unread_count || 0), 0);
+        showSellerMsgNotif(totalUnread);
+      } catch (e) {
+        console.warn('[SellerMsgNotif] Failed to check unread threads:', e);
+      }
+    };
+    const delayTimer = setTimeout(checkSellerMessages, 2000);
+    return () => {
+      clearTimeout(delayTimer);
+      if (sellerMsgNotifTimer.current) clearTimeout(sellerMsgNotifTimer.current);
+    };
+  }, [user?.email]);
+  // ────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     const loadBusiness = async () => {
@@ -1012,7 +1059,45 @@ export default function SellerDashboardScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
+
+      {/* ── New Message Notification Popup (Seller) ── */}
+      {sellerMsgNotifVisible && (
+        <Animated.View
+          style={[
+            styles.sellerMsgNotifContainer,
+            {
+              opacity: sellerMsgNotifAnim,
+              transform: [{ translateY: sellerMsgNotifAnim.interpolate({ inputRange: [0, 1], outputRange: [-80, 0] }) }],
+            },
+          ]}
+        >
+          <LinearGradient colors={['#7C3AED', '#4F46E5']} style={styles.sellerMsgNotifGradient}>
+            <View style={styles.sellerMsgNotifLeft}>
+              <Ionicons name="chatbubbles" size={22} color="#fff" style={{ marginRight: 10 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sellerMsgNotifTitle}>💬 New Messages from Buyers!</Text>
+                <Text style={styles.sellerMsgNotifBody}>
+                  You have {sellerMsgNotifCount} unread {sellerMsgNotifCount === 1 ? 'message' : 'messages'} from your buyers.
+                </Text>
+              </View>
+            </View>
+            <View style={styles.sellerMsgNotifRight}>
+              <Pressable
+                style={styles.sellerMsgNotifViewBtn}
+                onPress={() => { dismissSellerMsgNotif(); navigation.navigate('SellerMessages'); }}
+              >
+                <Text style={styles.sellerMsgNotifViewText}>View</Text>
+              </Pressable>
+              <Pressable onPress={dismissSellerMsgNotif} style={{ padding: 4 }}>
+                <Ionicons name="close" size={18} color="rgba(255,255,255,0.7)" />
+              </Pressable>
+            </View>
+          </LinearGradient>
+        </Animated.View>
+      )}
+
       {/* SECTION 1: HEADER */}
+
       <View style={[styles.header, { backgroundColor: 'transparent', borderBottomWidth: 0 }]}>
         <Text style={[styles.logoText, { color: '#2563EB' }]}>Reachlo</Text>
         <View style={styles.headerRight}>
@@ -4729,5 +4814,60 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748B',
     marginTop: 1,
+  },
+
+  // ── Seller New Message Notification Styles ─────────────────────────────
+  sellerMsgNotifContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 9999,
+    shadowColor: '#7C3AED',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 20,
+  },
+  sellerMsgNotifGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  sellerMsgNotifLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  sellerMsgNotifTitle: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
+    marginBottom: 2,
+  },
+  sellerMsgNotifBody: {
+    color: 'rgba(255,255,255,0.88)',
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  sellerMsgNotifRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sellerMsgNotifViewBtn: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
+  sellerMsgNotifViewText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 13,
   },
 });

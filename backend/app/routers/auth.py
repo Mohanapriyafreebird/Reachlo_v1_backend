@@ -8,6 +8,8 @@ from app.security import get_password_hash, verify_password, create_access_token
 from app.dependencies import get_current_user
 import re
 from datetime import datetime
+import threading as _threading
+from app.database import SessionLocal as _SessionLocal
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -57,6 +59,8 @@ def register(user_in: UserRegister, db: Session = Depends(get_db)):
     For SELLER accounts: accepts additional seller-specific fields
     (business_description, usp, latitude, longitude, location_address).
     Both users and businesses rows are created in the same transaction to avoid orphaned records.
+    AI enrichment (category detection, business analysis) runs in a background thread
+    so the registration response is returned immediately without waiting for Gemini.
     """
     # Check if user already exists
     existing_user = db.query(User).filter(User.email == user_in.email.lower()).first()
@@ -66,7 +70,7 @@ def register(user_in: UserRegister, db: Session = Depends(get_db)):
             detail="Email is already registered."
         )
 
-    # Create new user (city/area no longer stored on users table)
+    # Create new user
     hashed_password = get_password_hash(user_in.password)
     new_user = User(
         name=user_in.name,
@@ -80,12 +84,12 @@ def register(user_in: UserRegister, db: Session = Depends(get_db)):
     db.commit()
     new_user = db.query(User).filter(User.email == user_in.email.lower()).first()
 
-    # If the user is a SELLER, create business profile in the same transaction
+    # If the user is a SELLER, create the business profile immediately with default category,
+    # then enrich with AI in the background (non-blocking).
     if new_user.role == "SELLER":
         business_name = (user_in.company_name or "").strip() or f"{new_user.name}'s Business"
 
         # Smart city extraction from location_address
-        # e.g. 'Third floor, J4B, Periyar St, Medavakkam, Chennai, Tamil Nadu 600100, India' → 'Chennai'
         biz_city = ""
         if user_in.location_address:
             biz_city = _extract_city_from_address(user_in.location_address)
@@ -93,52 +97,20 @@ def register(user_in: UserRegister, db: Session = Depends(get_db)):
             biz_city = user_in.city.strip()
         biz_city = biz_city or "Unknown"
 
-        # Auto-detect category using Gemini Flash (runs once at registration, result saved to DB)
-        detected_category = "Other"
-        detected_sub_category = None
-        ai_business_analysis_json = None
-
-        if user_in.business_description:
-            try:
-                from app.utils.ai_generation import detect_category
-                result = detect_category(user_in.business_description)
-                detected_category = result.get("category", "Other") or "Other"
-                detected_sub_category = result.get("sub_category")
-            except Exception as e:
-                # If Gemini call fails, default to "Other" — seller can override from profile
-                print(f"[WARN] Category auto-detection failed: {e}")
-
-            # Pre-compute and cache business analysis so first campaign generation is fast
-            try:
-                from app.utils.ai_generation import analyze_business
-                import json as _json
-                analysis = analyze_business(
-                    business_name=business_name,
-                    business_description=user_in.business_description,
-                    usp=user_in.usp or "",
-                    category=detected_category,
-                    city=biz_city,
-                )
-                ai_business_analysis_json = _json.dumps(analysis)
-            except Exception as e:
-                # Non-fatal — analysis generated lazily on first campaign generation
-                print(f"[WARN] Business analysis pre-computation failed: {e}")
-
+        # Create the business row immediately with placeholder category so the seller
+        # can log in and use the dashboard right away. AI enrichment updates it asynchronously.
         new_business = Business(
             user_id=new_user.id,
             name=business_name,
-            category=detected_category,
-            sub_category=detected_sub_category,
-            # business_description: what the business provides — feeds AI generation
-            # DISTINCT from campaigns.description which is per-campaign marketing copy
+            category="Other",          # Updated by background AI thread
+            sub_category=None,         # Updated by background AI thread
             business_description=user_in.business_description,
             usp=user_in.usp,
             city=biz_city,
             location_address=user_in.location_address,
             latitude=user_in.latitude,
             longitude=user_in.longitude,
-            ai_business_analysis=ai_business_analysis_json,
-            # Auto-populate whatsapp_number from the seller's phone number
+            ai_business_analysis=None, # Updated by background AI thread
             whatsapp_number=new_user.phone,
             verified=False,
             rating=0.0,
@@ -146,6 +118,66 @@ def register(user_in: UserRegister, db: Session = Depends(get_db)):
         )
         db.add(new_business)
         db.commit()
+        db.refresh(new_business)
+
+        # ── Background AI enrichment ─────────────────────────────────────────
+        # Runs AFTER the response has been sent so the seller is never blocked.
+        business_id = new_business.id
+        business_desc = user_in.business_description
+        seller_usp = user_in.usp or ""
+
+        def _enrich_business_ai(b_id, b_name, b_desc, b_usp, b_city, b_cat_placeholder):
+            """Runs in a daemon thread — updates business row with AI-detected category."""
+            if not b_desc:
+                return
+            bg_db = _SessionLocal()
+            try:
+                detected_category = "Other"
+                detected_sub_category = None
+                ai_analysis_json = None
+
+                try:
+                    from app.utils.ai_generation import detect_category
+                    result = detect_category(b_desc)
+                    detected_category = result.get("category", "Other") or "Other"
+                    detected_sub_category = result.get("sub_category")
+                except Exception as e:
+                    print(f"[BG] Category auto-detection failed: {e}")
+
+                try:
+                    from app.utils.ai_generation import analyze_business
+                    import json as _json
+                    analysis = analyze_business(
+                        business_name=b_name,
+                        business_description=b_desc,
+                        usp=b_usp,
+                        category=detected_category,
+                        city=b_city,
+                    )
+                    ai_analysis_json = _json.dumps(analysis)
+                except Exception as e:
+                    print(f"[BG] Business analysis pre-computation failed: {e}")
+
+                # Write AI results back to the business row
+                biz = bg_db.query(Business).filter(Business.id == b_id).first()
+                if biz:
+                    biz.category = detected_category
+                    biz.sub_category = detected_sub_category
+                    biz.ai_business_analysis = ai_analysis_json
+                    bg_db.commit()
+                    print(f"[BG] Business {b_id} enriched: category={detected_category}")
+            except Exception as e:
+                print(f"[BG] AI enrichment error for business {b_id}: {e}")
+            finally:
+                bg_db.close()
+
+        t = _threading.Thread(
+            target=_enrich_business_ai,
+            args=(business_id, business_name, business_desc, seller_usp, biz_city, "Other"),
+            daemon=True,
+        )
+        t.start()
+        # ────────────────────────────────────────────────────────────────────
 
     # Generate token — seller is immediately logged in after registration
     access_token = create_access_token(data={"sub": new_user.email})
@@ -171,6 +203,32 @@ def login(login_in: UserLogin, db: Session = Depends(get_db)):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User account is deactivated."
         )
+
+    # ── STRICT ROLE-BASED PORTAL VALIDATION ─────────────────────────────────
+    # If the client declares which portal it is (BUYER or SELLER), enforce it.
+    # This prevents a Buyer from logging into the Seller portal and vice versa.
+    # The token is NEVER generated when the role doesn't match the portal.
+    if login_in.requested_role:
+        requested = login_in.requested_role.upper().strip()
+        # ADMIN accounts are allowed through either portal (internal access)
+        if user.role != "ADMIN" and user.role != requested:
+            if user.role == "BUYER":
+                detail_msg = (
+                    "Wrong Login Portal. This account is registered as a Buyer. "
+                    "Please sign in using the Buyer Login page."
+                )
+            elif user.role == "SELLER":
+                detail_msg = (
+                    "Wrong Login Portal. This account is registered as a Seller. "
+                    "Please sign in using the Seller Login page."
+                )
+            else:
+                detail_msg = f"Wrong login portal. This account role ({user.role}) does not match the requested portal ({requested})."
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=detail_msg,
+            )
+    # ────────────────────────────────────────────────────────────────────────
 
     # Record login event in login_history
     try:
