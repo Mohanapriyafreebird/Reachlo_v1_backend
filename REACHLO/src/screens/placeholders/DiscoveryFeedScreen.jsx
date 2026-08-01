@@ -12,6 +12,7 @@ import {
   Image,
   FlatList,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -362,6 +363,53 @@ export default function DiscoveryFeedScreen() {
   const [recentlyViewed, setRecentlyViewed] = useState([]);
   const [buyerLocation, setBuyerLocation] = useState(null);
 
+  // ── New Message Notification (10-second popup on login) ─────────────────
+  const [msgNotifVisible, setMsgNotifVisible] = useState(false);
+  const [msgNotifSenders, setMsgNotifSenders] = useState([]);
+  const msgNotifAnim = useRef(new Animated.Value(0)).current;
+  const msgNotifTimer = useRef(null);
+
+  const showMsgNotif = (senders) => {
+    setMsgNotifSenders(senders);
+    setMsgNotifVisible(true);
+    Animated.spring(msgNotifAnim, { toValue: 1, useNativeDriver: true, tension: 60, friction: 8 }).start();
+    msgNotifTimer.current = setTimeout(() => dismissMsgNotif(), 10000);
+  };
+
+  const dismissMsgNotif = () => {
+    if (msgNotifTimer.current) clearTimeout(msgNotifTimer.current);
+    Animated.timing(msgNotifAnim, { toValue: 0, duration: 250, useNativeDriver: true }).start(() => {
+      setMsgNotifVisible(false);
+    });
+  };
+
+  useEffect(() => {
+    if (!user?.email) return;
+    const checkNewMessages = async () => {
+      try {
+        const threads = await apiService.get('/chat/threads');
+        // Find threads where the buyer has unread messages from sellers
+        const unreadThreads = (threads || []).filter(t => (t.buyer_unread_count || 0) > 0);
+        if (unreadThreads.length === 0) return;
+        // Get unique seller names from those threads
+        const senderNames = [...new Set(
+          unreadThreads.map(t => t.seller_name || 'a seller').filter(Boolean)
+        )].slice(0, 3);
+        showMsgNotif(senderNames);
+      } catch (e) {
+        // Non-fatal — don't crash the feed if this fails
+        console.warn('[MsgNotif] Failed to check unread threads:', e);
+      }
+    };
+    // Small delay so the UI is fully rendered before showing the popup
+    const delayTimer = setTimeout(checkNewMessages, 1500);
+    return () => {
+      clearTimeout(delayTimer);
+      if (msgNotifTimer.current) clearTimeout(msgNotifTimer.current);
+    };
+  }, [user?.email]);
+  // ────────────────────────────────────────────────────────────────────────
+
   const displayServicesData = useMemo(() => {
     return SERVICES_DATA.map((service) => {
       const matchingCampaigns = campaigns.filter((camp) => camp.serviceId === service.id);
@@ -419,36 +467,71 @@ export default function DiscoveryFeedScreen() {
   const fetchFeedCampaigns = async () => {
     setLoading(true);
     try {
-      const url = appliedCity ? `/campaigns?city=${encodeURIComponent(appliedCity)}` : '/campaigns';
+      const url = '/campaigns';
+      console.log('[DEBUG] Fetching campaigns from:', url);
       const fetched = await apiService.get(url);
+      console.log(`[DEBUG] Fetched ${fetched.length} campaigns from API`);
+
       const sv = await AsyncStorage.getItem(`savedCampaigns_${user?.email || ''}`);
       const savedIds = sv ? JSON.parse(sv) : [];
+
+      /**
+       * Robust category → serviceId mapper.
+       * Handles ALL variations the AI or manual input might produce:
+       *   "Health & Wellness", "Health", "Gyms", "gym", "Fitness", "Health_Wellness", etc.
+       * Strategy: lowercase + keyword search.
+       */
+      const mapCategoryToServiceId = (rawCategory) => {
+        if (!rawCategory) return 'other';
+        const c = rawCategory.toLowerCase().trim();
+
+        if (c.includes('it') || c.includes('tech') || c.includes('software') || c.includes('mobile app') || c.includes('web') || c.includes('cyber') || c.includes('cloud') || c.includes('digital')) return 'it';
+        if (c.includes('edu') || c.includes('train') || c.includes('coaching') || c.includes('learn') || c.includes('course') || c.includes('tutor') || c.includes('school') || c.includes('academy')) return 'edu';
+        if (c.includes('health') || c.includes('wellness') || c.includes('gym') || c.includes('fitness') || c.includes('yoga') || c.includes('physio') || c.includes('nutri') || c.includes('trainer') || c.includes('medical') || c.includes('clinic') || c.includes('hospital')) return 'health';
+        if (c.includes('beauty') || c.includes('salon') || c.includes('spa') || c.includes('skin') || c.includes('hair') || c.includes('bridal') || c.includes('makeup') || c.includes('groom')) return 'beauty';
+        if (c.includes('food') || c.includes('restaurant') || c.includes('cafe') || c.includes('bakery') || c.includes('catering') || c.includes('kitchen') || c.includes('dining') || c.includes('eat')) return 'food';
+        if (c.includes('event') || c.includes('entertainment') || c.includes('wedding') || c.includes('photography') || c.includes('dj') || c.includes('birthday') || c.includes('party')) return 'events';
+        if (c.includes('real estate') || c.includes('property') || c.includes('pg') || c.includes('hostel') || c.includes('interior') || c.includes('vastu') || c.includes('rental') || c.includes('flat') || c.includes('apartment')) return 'realestate';
+        if (c.includes('transport') || c.includes('delivery') || c.includes('logistics') || c.includes('courier') || c.includes('mover') || c.includes('packer') || c.includes('cab') || c.includes('bike taxi') || c.includes('freight')) return 'transport';
+        if (c.includes('auto') || c.includes('car') || c.includes('vehicle') || c.includes('bike service') || c.includes('driving') || c.includes('tyre') || c.includes('spare')) return 'auto';
+        if (c.includes('finance') || c.includes('insurance') || c.includes('invest') || c.includes('loan') || c.includes('tax') || c.includes('ca ') || c.includes('accounting') || c.includes('mutual fund')) return 'finance';
+        if (c.includes('legal') || c.includes('lawyer') || c.includes('law') || c.includes('compliance') || c.includes('gst') || c.includes('patent') || c.includes('trademark') || c.includes('document')) return 'legal';
+        if (c.includes('home') || c.includes('repair') || c.includes('electrician') || c.includes('plumb') || c.includes('ac repair') || c.includes('painting') || c.includes('pest') || c.includes('clean') || c.includes('maintenance')) return 'home';
+        if (c.includes('travel') || c.includes('tourism') || c.includes('tour') || c.includes('visa') || c.includes('hotel') || c.includes('holiday') || c.includes('pilgrimage') || c.includes('adventure')) return 'travel';
+        if (c.includes('shopping') || c.includes('retail') || c.includes('fashion') || c.includes('cloth') || c.includes('electronics') || c.includes('grocery') || c.includes('jewel') || c.includes('furniture') || c.includes('gift')) return 'shopping';
+
+        return 'other';
+      };
+
       const mapped = fetched.map(camp => {
         let categoryName = camp.category || '';
-        let subCategoryName = categoryName;
+        let subCategoryName = null;
+
+        // If the category field uses "::" separator (legacy format)
         if (categoryName.includes('::')) {
           const parts = categoryName.split('::');
-          categoryName = parts[0];
-          subCategoryName = parts[1];
+          categoryName = parts[0].trim();
+          subCategoryName = parts[1].trim();
         }
 
-        let serviceId = 'it';
-        if (categoryName === 'IT & Technology Services') serviceId = 'it';
-        else if (categoryName === 'Education & Training') serviceId = 'edu';
-        else if (categoryName === 'Health & Wellness') serviceId = 'health';
-        else if (categoryName === 'Beauty & Personal Care') serviceId = 'beauty';
-        else if (categoryName === 'Food & Restaurants') serviceId = 'food';
-        else if (categoryName === 'Events & Entertainment') serviceId = 'events';
-        else if (categoryName === 'Real Estate & Property') serviceId = 'realestate';
-        else if (categoryName === 'Transport & Delivery') serviceId = 'transport';
-        else if (categoryName === 'Automotive Services') serviceId = 'auto';
-        else if (categoryName === 'Finance & Insurance') serviceId = 'finance';
-        else if (categoryName === 'Legal & Compliance') serviceId = 'legal';
-        else if (categoryName === 'Home & Repair Services') serviceId = 'home';
-        else if (categoryName === 'Travel & Tourism') serviceId = 'travel';
-        else if (categoryName === 'Shopping & Retail') serviceId = 'shopping';
-        else serviceId = 'other';
-        
+        // Use sub_category from business profile if available (preferred)
+        if (camp.sub_category) {
+          subCategoryName = camp.sub_category;
+        }
+
+        // If still no subcategory, use the raw category itself as subcategory
+        // (e.g. "Gyms" stored as campaign category → shows under Health → Gyms)
+        if (!subCategoryName) {
+          subCategoryName = categoryName;
+        }
+
+        const serviceId = mapCategoryToServiceId(categoryName) !== 'other'
+          ? mapCategoryToServiceId(categoryName)
+          // Fallback: try to map from sub_category field if main category didn't match
+          : mapCategoryToServiceId(subCategoryName);
+
+        console.log(`[DEBUG] Campaign "${camp.title}" | category="${camp.category}" | sub_category="${camp.sub_category}" → serviceId="${serviceId}" subService="${subCategoryName}"`);
+
         return {
           id: camp.id,
           title: camp.title,
@@ -457,7 +540,8 @@ export default function DiscoveryFeedScreen() {
           category: categoryName,
           subService: subCategoryName,
           serviceId: serviceId,
-          city: camp.city,
+          // Note: campaigns don't have a city field in the API response
+          // city filtering is done via Offers Near You (GPS) instead
           businessName: camp.business_name || 'Partner Business',
           businessVerified: camp.business_verified ?? false,
           views: camp.view_count,
@@ -475,11 +559,18 @@ export default function DiscoveryFeedScreen() {
           latitude: camp.latitude,
           longitude: camp.longitude,
           locationAddress: camp.location_address,
+          seller_phone: camp.seller_phone,
+          seller_whatsapp: camp.seller_whatsapp,
         };
       });
+
+      console.log(`[DEBUG] Mapped ${mapped.length} campaigns. ServiceId breakdown:`, 
+        mapped.reduce((acc, c) => { acc[c.serviceId] = (acc[c.serviceId] || 0) + 1; return acc; }, {})
+      );
+
       setCampaigns(mapped);
     } catch (error) {
-      console.error("Failed to fetch campaigns for feed:", error);
+      console.error("[DEBUG] Failed to fetch campaigns for feed:", error);
     } finally {
       setLoading(false);
     }
@@ -509,6 +600,8 @@ export default function DiscoveryFeedScreen() {
         price: c.price ?? null,
         endDate: c.end_date || null,
         distance_km: c.distance_km,
+        seller_phone: c.seller_phone,
+        seller_whatsapp: c.seller_whatsapp,
         latitude: c.latitude,
         longitude: c.longitude,
         locationAddress: c.location_address,
@@ -772,7 +865,8 @@ export default function DiscoveryFeedScreen() {
   const handleQuickCall = async (camp) => {
     try {
       await createLead(camp, "Called seller directly via CTA");
-      Alert.alert('Call Seller', `Connecting you to ${camp.businessName}...\nPhone: ${camp.phone || '+91 98765 43210'}`);
+      const phone = camp.seller_phone || camp.seller_whatsapp || '+910000000000';
+      Linking.openURL(`tel:${phone}`);
     } catch (e) {
       Alert.alert('Error', 'Could not register your interest. Please try again.');
     }
@@ -781,7 +875,9 @@ export default function DiscoveryFeedScreen() {
   const handleQuickWhatsApp = async (camp) => {
     try {
       await createLead(camp, "Contacted seller via WhatsApp CTA");
-      Alert.alert('WhatsApp Chat', `Opening WhatsApp conversation with ${camp.businessName}...\nNumber: ${camp.whatsapp || '+91 98765 43210'}`);
+      const phone = camp.seller_whatsapp || camp.seller_phone || '+910000000000';
+      const text = `Hi, I am interested in your offer on Reachlo: ${camp.offerLine || camp.title}`;
+      Linking.openURL(`whatsapp://send?text=${encodeURIComponent(text)}&phone=${phone}`);
     } catch (e) {
       Alert.alert('Error', 'Could not register your interest. Please try again.');
     }
@@ -861,8 +957,19 @@ export default function DiscoveryFeedScreen() {
         (c.subService && c.subService.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (c.category && c.category.toLowerCase().includes(searchQuery.toLowerCase()));
 
-      // 2. Matches sub-service selection if provided
-      const matchesSubService = !subServiceName || (c.subService && c.subService.toLowerCase().trim() === subServiceName.toLowerCase().trim());
+      // 2. Fuzzy subcategory match (plural-tolerant, contains-based)
+      // e.g. "Gyms" matches "Gym" or "Fitness Centers" matches "Fitness Centre"
+      let matchesSubService = true;
+      if (subServiceName) {
+        const subNorm = subServiceName.toLowerCase().trim().replace(/s$/, '');
+        const cSubService = (c.subService || '').toLowerCase().trim().replace(/s$/, '');
+        const cCategory = (c.category || '').toLowerCase().trim().replace(/s$/, '');
+        matchesSubService =
+          cSubService.includes(subNorm) ||
+          subNorm.includes(cSubService) ||
+          cCategory.includes(subNorm) ||
+          subNorm.includes(cCategory);
+      }
 
       // 3. Price Filter (Maximum Limit)
       const matchesPrice = !appliedPrice || c.price <= appliedPrice;
@@ -870,10 +977,10 @@ export default function DiscoveryFeedScreen() {
       // 4. Rating Filter (Minimum limit)
       const matchesRating = !appliedRating || c.rating >= appliedRating;
 
-      // 5. City Filter
-      const matchesCity = !appliedCity || (c.city && c.city.toLowerCase() === appliedCity.toLowerCase());
+      // NOTE: City filter intentionally removed — campaigns are shown globally in category view.
+      // Location-based filtering (GPS distance) is handled separately by the "Offers Near You" section.
 
-      return matchesSearch && matchesSubService && matchesPrice && matchesRating && matchesCity;
+      return matchesSearch && matchesSubService && matchesPrice && matchesRating;
     });
   };
 
@@ -892,6 +999,45 @@ export default function DiscoveryFeedScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.bgOrbOne} pointerEvents="none" />
       <View style={styles.bgOrbTwo} pointerEvents="none" />
+
+      {/* ── New Message Notification Popup ── */}
+      {msgNotifVisible && (
+        <Animated.View
+          style={[
+            styles.msgNotifContainer,
+            {
+              opacity: msgNotifAnim,
+              transform: [{ translateY: msgNotifAnim.interpolate({ inputRange: [0, 1], outputRange: [-80, 0] }) }],
+            },
+          ]}
+        >
+          <LinearGradient colors={['#1D4ED8', '#2563EB']} style={styles.msgNotifGradient}>
+            <View style={styles.msgNotifLeft}>
+              <Ionicons name="chatbubbles" size={22} color="#fff" style={{ marginRight: 10 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.msgNotifTitle}>💬 New Messages!</Text>
+                <Text style={styles.msgNotifBody} numberOfLines={2}>
+                  {msgNotifSenders.length === 1
+                    ? `${msgNotifSenders[0]} sent you a message.`
+                    : `${msgNotifSenders.slice(0, -1).join(', ')} and ${msgNotifSenders[msgNotifSenders.length - 1]} sent you messages.`}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.msgNotifRight}>
+              <Pressable
+                style={styles.msgNotifViewBtn}
+                onPress={() => { dismissMsgNotif(); navigation.navigate('BuyerInbox'); }}
+              >
+                <Text style={styles.msgNotifViewText}>View</Text>
+              </Pressable>
+              <Pressable onPress={dismissMsgNotif} style={{ padding: 4 }}>
+                <Ionicons name="close" size={18} color="rgba(255,255,255,0.7)" />
+              </Pressable>
+            </View>
+          </LinearGradient>
+        </Animated.View>
+      )}
+
       {/* HEADER */}
       <LinearGradient colors={['#EFF6FF', '#DBEAFE', '#FFFFFF']} style={styles.headerGradient}>
         <View style={styles.header}>
@@ -2843,5 +2989,60 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontWeight: '700',
     fontSize: FONT_SIZES.SM,
+  },
+
+  // ── New Message Notification Styles ────────────────────────────────────
+  msgNotifContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 9999,
+    shadowColor: '#1D4ED8',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 20,
+  },
+  msgNotifGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 12,
+  },
+  msgNotifLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  msgNotifTitle: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
+    marginBottom: 2,
+  },
+  msgNotifBody: {
+    color: 'rgba(255,255,255,0.88)',
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  msgNotifRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  msgNotifViewBtn: {
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
+  msgNotifViewText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 13,
   },
 });

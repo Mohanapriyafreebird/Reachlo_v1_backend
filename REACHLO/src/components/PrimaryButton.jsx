@@ -15,6 +15,7 @@ export default function PrimaryButton({
   ...props
 }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const isPressing = useRef(false);
 
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
@@ -32,6 +33,18 @@ export default function PrimaryButton({
       tension: 100,
       friction: 6,
     }).start();
+  };
+
+  const handlePress = (e) => {
+    if (isPressing.current || isButtonDisabled) return;
+    isPressing.current = true;
+    if (onPress) {
+      onPress(e);
+    }
+    // Allow pressing again after 500ms to prevent accidental double taps
+    setTimeout(() => {
+      isPressing.current = false;
+    }, 500);
   };
 
   const isButtonDisabled = disabled || loading;
@@ -55,7 +68,7 @@ export default function PrimaryButton({
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={handlePress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       disabled={isButtonDisabled}

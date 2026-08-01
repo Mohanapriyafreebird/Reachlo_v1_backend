@@ -1,5 +1,6 @@
 import React, { useState, useRef, Component } from 'react'
 import { Modal, View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps'
 
 // Prevent native map crash from propagating upward
@@ -52,7 +53,7 @@ export default function PlacesAdjustMap({ visible, initialRegion, onClose, onSav
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>Adjust Location</Text>
         </View>
@@ -87,7 +88,7 @@ export default function PlacesAdjustMap({ visible, initialRegion, onClose, onSav
             <Text style={[styles.btnText, { color: '#fff' }]}>Save</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </SafeAreaView>
     </Modal>
   )
 }

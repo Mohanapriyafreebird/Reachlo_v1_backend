@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     AWS_ACCESS_KEY_ID: str | None = None
     AWS_SECRET_ACCESS_KEY: str | None = None
     AWS_REGION: str = "ap-south-1"
+    
+    # Cloudinary Config
+    CLOUDINARY_CLOUD_NAME: str | None = None
+    CLOUDINARY_UPLOAD_PRESET: str | None = None
 
     class Config:
         env_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")

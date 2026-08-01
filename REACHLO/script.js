@@ -1,0 +1,1 @@
+const fs = require('fs'); let content = fs.readFileSync('src/screens/placeholders/DiscoveryFeedScreen.jsx', 'utf8'); content = content.replace(/subServices:\s*\[\s*(?!'All')/g, 'subServices: [\n        \'All\',\n        '); fs.writeFileSync('src/screens/placeholders/DiscoveryFeedScreen.jsx', content); console.log('Done');

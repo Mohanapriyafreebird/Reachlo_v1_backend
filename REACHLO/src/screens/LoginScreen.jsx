@@ -60,7 +60,7 @@ const SLIDES = [
 ];
 
 export default function LoginScreen({ navigation }) {
-  const { login } = useAuth();
+  const { login, clearAuth } = useAuth();
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -176,20 +176,22 @@ export default function LoginScreen({ navigation }) {
 
     setLoading(true);
     try {
-      const response = await login(email.trim(), password);
+      // Pass requested_role='SELLER' so the backend enforces portal isolation server-side.
+      // The backend will reject Buyer accounts with HTTP 403 before issuing any token.
+      const response = await login(email.trim(), password, 'SELLER');
 
-      // ── Role guard: This is the SELLER login screen ───────────────────────
-      // If the backend returns a non-seller role, the user used the wrong login.
-      // We log them out immediately and show a friendly message.
+      // ── Frontend role guard (defensive layer) ────────────────────────────
+      // Should not be reached if backend enforcement is working, but kept as a
+      // safety net for older server versions or misconfiguration.
       if (response.role !== 'SELLER' && response.role !== 'ADMIN') {
-        await authService.logout(); // clear the stored token
+        await clearAuth();
         showToastMsg(
-          'You are registered as a Buyer. Please use the \'Explore Amazing Offers\' login instead.',
+          "⚠ Wrong Login Portal\n\nThis account is registered as a Buyer.\nPlease use the 'Explore Amazing Offers' login instead.",
           'error'
         );
         return;
       }
-      // ─────────────────────────────────────────────────────────────────────
+      // ────────────────────────────────────────────────────────────────────
 
       if (response.role === 'SELLER') {
         navigation.replace('SellerDashboard');
@@ -197,8 +199,16 @@ export default function LoginScreen({ navigation }) {
         navigation.replace('AdminDashboard');
       }
     } catch (err) {
-      const message = err?.message || 'Invalid email or password';
-      showToastMsg(message, 'error');
+      // The backend returns 403 with a descriptive message for wrong-portal attempts
+      const rawMessage = err?.message || 'Invalid email or password';
+      if (rawMessage.toLowerCase().includes('wrong login portal') || rawMessage.toLowerCase().includes('registered as a buyer')) {
+        showToastMsg(
+          '⚠ Wrong Login Portal\n\nThis account is registered as a Buyer.\nPlease use the Buyer Login page to continue.',
+          'error'
+        );
+      } else {
+        showToastMsg(rawMessage, 'error');
+      }
     } finally {
       setLoading(false);
     }

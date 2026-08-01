@@ -88,7 +88,6 @@ function SafeMapView({ latitude, longitude }) {
           zoomEnabled={false}
           pitchEnabled={false}
           rotateEnabled={false}
-          liteMode={true}
         >
           <Marker coordinate={{ latitude: lat, longitude: lng }} pinColor="#2563EB" />
         </MapView>

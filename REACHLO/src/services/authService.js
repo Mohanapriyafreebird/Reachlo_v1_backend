@@ -44,12 +44,13 @@ export const authService = {
     };
   },
 
-  login: async ({ email, password }) => {
+  login: async ({ email, password, requested_role }) => {
     // Send login request to the backend
-    const response = await apiService.post('/auth/login', {
-      email,
-      password,
-    });
+    const payload = { email, password };
+    if (requested_role) {
+      payload.requested_role = requested_role;
+    }
+    const response = await apiService.post('/auth/login', payload);
 
     // Save access token, role, and user details in AsyncStorage
     const { access_token, user } = response;

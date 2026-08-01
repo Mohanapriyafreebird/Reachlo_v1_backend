@@ -63,7 +63,7 @@ def _normalize_image_urls(image_url: Optional[str], image_urls: Optional[list[st
     return primary, stored, urls
 
 
-def _enrich_campaign_response(campaign: Campaign, business: Optional[Business] = None) -> CampaignResponse:
+def _enrich_campaign_response(campaign: Campaign, business: Optional[Business] = None, skip_enrichment: bool = False) -> CampaignResponse:
     urls = _parse_stored_image_urls(campaign)
     biz = business or campaign.business
 
@@ -72,22 +72,24 @@ def _enrich_campaign_response(campaign: Campaign, business: Optional[Business] =
     lng = campaign.longitude
     place_id = campaign.google_place_id
 
-    # If a Google Place ID exists, prefer authoritative place details.
-    if place_id:
-        details = get_place_details(place_id)
-        if details:
-            loc_address = details.get('formatted_address') or loc_address
-            lat = details.get('latitude') or lat
-            lng = details.get('longitude') or lng
-            place_id = details.get('place_id') or place_id
+    # Skip slow external API calls during creation/update to prevent timeouts
+    if not skip_enrichment:
+        # If a Google Place ID exists but no coordinates/address, fetch details.
+        if place_id and (not loc_address or lat is None):
+            details = get_place_details(place_id)
+            if details:
+                loc_address = details.get('formatted_address') or loc_address
+                lat = details.get('latitude') or lat
+                lng = details.get('longitude') or lng
+                place_id = details.get('place_id') or place_id
 
-    # If coordinates exist but no address, reverse geocode them.
-    if (lat is not None and lng is not None) and not loc_address:
-        rg = reverse_geocode(lat, lng)
-        if rg:
-            loc_address = rg.get('formatted_address')
-            if not place_id:
-                place_id = rg.get('place_id')
+        # If coordinates exist but no address, reverse geocode them.
+        if (lat is not None and lng is not None) and not loc_address:
+            rg = reverse_geocode(lat, lng)
+            if rg:
+                loc_address = rg.get('formatted_address')
+                if not place_id:
+                    place_id = rg.get('place_id')
 
     # Reject null/zero coordinates.
     if lat is not None and lng is not None:
@@ -110,6 +112,7 @@ def _enrich_campaign_response(campaign: Campaign, business: Optional[Business] =
         cta_type=campaign.cta_type,
         cta_value=campaign.cta_value,
         category=campaign.category,
+        sub_category=biz.sub_category if biz else None,
         target_audience=campaign.target_audience,
         price=campaign.price,
         start_date=campaign.start_date,
@@ -126,6 +129,8 @@ def _enrich_campaign_response(campaign: Campaign, business: Optional[Business] =
         google_place_id=place_id,
         business_name=biz.name if biz else "Unknown Business",
         business_verified=bool(biz.verified) if biz else False,
+        seller_whatsapp=biz.whatsapp_number if biz else None,
+        seller_phone=biz.user.phone if biz and getattr(biz, "user", None) else None,
     )
     return res
 
@@ -310,6 +315,7 @@ def places_details(place_id: str = Query(..., min_length=1)):
 @router.get("", response_model=List[CampaignResponse])
 def get_campaigns(
     category: Optional[str] = None,
+    subcategory: Optional[str] = None,
     city: Optional[str] = None,
     seller_mode: bool = False,
     db: Session = Depends(get_db),
@@ -339,12 +345,41 @@ def get_campaigns(
         )
 
         if category and category != "All":
-            query = query.filter(Campaign.category == category)
+            # Case-insensitive category match using LOWER()
+            from sqlalchemy import func as _func
+            query = query.filter(
+                _func.lower(_func.trim(Campaign.category)).contains(category.lower().strip())
+            )
+
+        # Debug: log what's being queried
+        print(f"[Campaigns] GET /campaigns category={category!r} subcategory={subcategory!r}")
+
         # city filter removed to show all live campaigns irrespective of buyer's city
 
     campaigns = query.order_by(Campaign.is_boosted.desc(), Campaign.created_at.desc()).all()
 
-    return [_enrich_campaign_response(c) for c in campaigns]
+    # Debug: log results
+    print(f"[Campaigns] Found {len(campaigns)} campaign(s) before subcategory filter")
+    for c in campaigns:
+        print(f"  Campaign: id={c.id} category={c.category!r} status={c.status}")
+
+    enriched = [_enrich_campaign_response(c) for c in campaigns]
+
+    # Apply subcategory filter in Python (case-insensitive, trim, plural-tolerant)
+    if subcategory and subcategory.lower() not in ('all', 'all categories'):
+        sub_norm = subcategory.lower().strip().rstrip('s')  # strip trailing 's' for plural matching
+        filtered = []
+        for r in enriched:
+            # Check campaign category field (e.g. stored as "Gyms" or "Gym")
+            cat_val = (r.category or '').lower().strip().rstrip('s')
+            # Check business sub_category (e.g. "Gyms")
+            sub_cat_val = (r.sub_category or '').lower().strip().rstrip('s')
+            if sub_norm in cat_val or cat_val in sub_norm or sub_norm in sub_cat_val or sub_cat_val in sub_norm:
+                filtered.append(r)
+        print(f"[Campaigns] After subcategory filter '{subcategory}': {len(filtered)} result(s)")
+        return filtered
+
+    return enriched
 
 
 @router.post("/filter-active", response_model=List[str])
@@ -408,7 +443,7 @@ def create_campaign(
     db.commit()
     db.refresh(new_campaign)
 
-    return _enrich_campaign_response(new_campaign, business)
+    return _enrich_campaign_response(new_campaign, business, skip_enrichment=True)
 
 
 @router.put("/{id}", response_model=CampaignResponse)
@@ -443,14 +478,7 @@ def update_campaign(
             update_data['longitude'] = details.get('longitude')
 
     if ('latitude' in update_data and 'longitude' in update_data) and not update_data.get('location_address'):
-        try:
-            rg = reverse_geocode(update_data.get('latitude'), update_data.get('longitude'))
-            if rg:
-                update_data['location_address'] = rg.get('formatted_address')
-                if 'google_place_id' not in update_data:
-                    update_data['google_place_id'] = rg.get('place_id')
-        except Exception:
-            pass
+        pass  # Skip reverse geocode on update to prevent timeout; will enrich on read
 
     if "image_urls" in update_data or "image_url" in update_data:
         incoming_urls = update_data.pop("image_urls", None)
@@ -467,7 +495,7 @@ def update_campaign(
     db.commit()
     db.refresh(campaign)
 
-    return _enrich_campaign_response(campaign, business)
+    return _enrich_campaign_response(campaign, business, skip_enrichment=True)
 
 
 @router.delete("/{id}", response_model=CampaignResponse)
@@ -494,7 +522,7 @@ def delete_campaign(
     db.commit()
     db.refresh(campaign)
 
-    return _enrich_campaign_response(campaign, business)
+    return _enrich_campaign_response(campaign, business, skip_enrichment=True)
 
 
 @router.post("/{id}/view", response_model=CampaignResponse)
@@ -526,4 +554,4 @@ def track_campaign_view(
     db.refresh(campaign)
 
     business = db.query(Business).filter(Business.id == campaign.business_id).first()
-    return _enrich_campaign_response(campaign, business)
+    return _enrich_campaign_response(campaign, business, skip_enrichment=True)
