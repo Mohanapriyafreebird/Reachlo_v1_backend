@@ -27,6 +27,7 @@ import COLORS from '../../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../../constants/typography';
 import Toast from '../../components/Toast';
 import BusinessLocationPicker from '../../components/BusinessLocationPicker';
+import RatingModal from '../../components/RatingModal';
 import { useAuth } from '../../context/AuthContext';
 import apiService from '../../services/apiService';
 
@@ -72,6 +73,13 @@ export default function SellerProfileScreen({ navigation }) {
   const [showChatSettingsModal, setShowChatSettingsModal] = useState(false);
   const [chatRetention, setChatRetention] = useState('forever');
   const [savingChatSettings, setSavingChatSettings] = useState(false);
+
+  // FAQ Modal
+  const [showFaqModal, setShowFaqModal] = useState(false);
+
+  // Rating Modal
+  const [showRatingModal, setShowRatingModal] = useState(false);
+
   
   useEffect(() => {
     const loadChatSettings = async () => {
@@ -603,6 +611,15 @@ export default function SellerProfileScreen({ navigation }) {
               <SettingsRow icon="log-out-outline" title="Logout" color="#EF4444" onPress={logout} hideArrow />
             </View>
             
+            {/* Help & Support */}
+            <Text style={styles.sectionTitle}>Help & Support</Text>
+            <View style={styles.card}>
+              <SettingsRow icon="help-buoy-outline" title="Help & Support" onPress={() => navigation.navigate('HelpSupport')} />
+              <SettingsRow icon="information-circle-outline" title="About REACHLO" onPress={() => navigation.navigate('AboutReachlo')} />
+              <SettingsRow icon="shield-checkmark-outline" title="Privacy Policy" onPress={() => navigation.navigate('PrivacyPolicy')} />
+              <SettingsRow icon="star-outline" title="Rate REACHLO" onPress={() => setShowRatingModal(true)} />
+            </View>
+            
           </View>
           <View style={{ height: 100 }} />
         </ScrollView>
@@ -698,11 +715,74 @@ export default function SellerProfileScreen({ navigation }) {
         </View>
       </Modal>
 
+      {/* FAQ Modal */}
+      <Modal visible={showFaqModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '80%' }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Frequently Asked Questions</Text>
+              <Pressable onPress={() => setShowFaqModal(false)}>
+                <Ionicons name="close" size={24} color="#0F172A" />
+              </Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+              {FAQ_DATA.map((item, idx) => (
+                <FaqAccordionItem key={idx} question={item.question} answer={item.answer} />
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <RatingModal 
+        visible={showRatingModal} 
+        onClose={() => setShowRatingModal(false)} 
+        userRole="seller" 
+      />
+
     </SafeAreaView>
   );
 }
 
 // ── Components ────────────────────────────────────────────────────────────────
+
+const FAQ_DATA = [
+  {
+    question: "How do I create a new campaign?",
+    answer: "Go to your Home Dashboard and click the 'Generate with AI' or 'Manual Creation' tile to start creating a new campaign instantly."
+  },
+  {
+    question: "Can I edit an active campaign?",
+    answer: "Yes, you can edit your active campaigns from the Campaigns tab by tapping the pencil icon on the campaign card."
+  },
+  {
+    question: "How do buyers contact me?",
+    answer: "Buyers can contact you via call or in-app chat. You will receive a push notification for new messages and leads."
+  },
+  {
+    question: "How is billing handled?",
+    answer: "We offer transparent billing with our Pro and Elite plans. You can upgrade or manage your billing settings in the app."
+  }
+];
+
+function FaqAccordionItem({ question, answer }) {
+  const [expanded, setExpanded] = useState(false);
+  
+  return (
+    <View style={styles.faqItem}>
+      <Pressable style={styles.faqHeader} onPress={() => {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setExpanded(!expanded);
+      }}>
+        <Text style={styles.faqQuestion}>{question}</Text>
+        <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={20} color={expanded ? "#2563EB" : "#64748B"} />
+      </Pressable>
+      {expanded && (
+        <Text style={styles.faqAnswer}>{answer}</Text>
+      )}
+    </View>
+  );
+}
 
 function AnalyticsCard({ icon, color, value, label }) {
   return (
@@ -908,4 +988,29 @@ const styles = StyleSheet.create({
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   modalTitle: { fontSize: 22, fontWeight: FONT_WEIGHTS.BOLD, color: '#0F172A' },
   modalSaveBtn: { height: 52, borderRadius: 14, overflow: 'hidden', marginTop: 12 },
+  
+  // FAQ
+  faqItem: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    paddingVertical: 16,
+  },
+  faqHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  faqQuestion: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#0F172A',
+    paddingRight: 16,
+  },
+  faqAnswer: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#475569',
+    lineHeight: 22,
+  },
 });

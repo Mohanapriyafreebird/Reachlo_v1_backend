@@ -75,6 +75,30 @@ export default function RegisterScreen({ route, navigation }) {
     layouts.current[field] = event.nativeEvent.layout.y;
   };
 
+  const validateField = (field, val) => {
+    let error = null;
+    if (field === 'name') {
+      if (!val.trim()) error = 'Full name is required';
+      else if (val.trim().length < 2) error = 'Name must be at least 2 characters';
+    } else if (field === 'companyName' && role === 'SELLER') {
+      if (!val.trim()) error = 'Company / Brand name is required for sellers';
+    } else if (field === 'email') {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!val.trim()) error = 'Email address is required';
+      else if (!emailRegex.test(val.trim())) error = 'Please enter a valid email address';
+    } else if (field === 'phone') {
+      const numericPhone = val.replace(/[^0-9]/g, '');
+      if (!val) error = 'Phone number is required';
+      else if (numericPhone.length !== 10) error = 'Phone number must be exactly 10 digits';
+    } else if (field === 'city') {
+      if (!val.trim()) error = 'City is required';
+    } else if (field === 'password') {
+      if (!val) error = 'Password is required';
+      else if (val.length < 8) error = 'Password must be at least 8 characters';
+    }
+    setErrors(prev => ({ ...prev, [field]: error }));
+  };
+
   const validate = () => {
     const tempErrors = {};
     
@@ -162,7 +186,17 @@ export default function RegisterScreen({ route, navigation }) {
         navigation.replace('DiscoveryFeed');
       }
     } catch (err) {
-      showToastMsg(err.message || 'Registration failed. Email might be taken.', 'error');
+      const msg = err.message || '';
+      // Show specific field errors for duplicate email/phone
+      if (msg.toLowerCase().includes('email')) {
+        setErrors(prev => ({ ...prev, email: 'This email is already registered' }));
+        showToastMsg('This email address is already registered. Please use a different email or log in.', 'error');
+      } else if (msg.toLowerCase().includes('mobile') || msg.toLowerCase().includes('phone') || msg.toLowerCase().includes('number')) {
+        setErrors(prev => ({ ...prev, phone: 'This phone number is already registered' }));
+        showToastMsg('This mobile number is already registered. Please use a different number or log in.', 'error');
+      } else {
+        showToastMsg(msg || 'Registration failed. Please try again.', 'error');
+      }
     } finally {
       setLoading(false);
     }
@@ -222,6 +256,7 @@ export default function RegisterScreen({ route, navigation }) {
                   autoCapitalize="words"
                   returnKeyType="next"
                   onSubmitEditing={() => (role === 'SELLER' ? companyNameRef.current?.focus() : emailRef.current?.focus())}
+                  onBlur={() => validateField('name', name)}
                   blurOnSubmit={false}
                   editable={!loading}
                 />
@@ -243,6 +278,7 @@ export default function RegisterScreen({ route, navigation }) {
                     autoCapitalize="words"
                     returnKeyType="next"
                     onSubmitEditing={() => emailRef.current?.focus()}
+                    onBlur={() => validateField('companyName', companyName)}
                     blurOnSubmit={false}
                     editable={!loading}
                   />
@@ -265,6 +301,7 @@ export default function RegisterScreen({ route, navigation }) {
                   autoCapitalize="none"
                   returnKeyType="next"
                   onSubmitEditing={() => phoneRef.current?.focus()}
+                  onBlur={() => validateField('email', email)}
                   blurOnSubmit={false}
                   editable={!loading}
                 />
@@ -288,6 +325,7 @@ export default function RegisterScreen({ route, navigation }) {
                   leftElement={<Text style={styles.prefixText}>+91</Text>}
                   returnKeyType="next"
                   onSubmitEditing={() => cityRef.current?.focus()}
+                  onBlur={() => validateField('phone', phone)}
                   blurOnSubmit={false}
                   editable={!loading}
                 />
@@ -308,6 +346,7 @@ export default function RegisterScreen({ route, navigation }) {
                   autoCapitalize="words"
                   returnKeyType="next"
                   onSubmitEditing={() => passwordRef.current?.focus()}
+                  onBlur={() => validateField('city', city)}
                   blurOnSubmit={false}
                   editable={!loading}
                 />
@@ -328,6 +367,7 @@ export default function RegisterScreen({ route, navigation }) {
                   showStrength={true}
                   returnKeyType="done"
                   onSubmitEditing={handleSubmit}
+                  onBlur={() => validateField('password', password)}
                   blurOnSubmit={true}
                   editable={!loading}
                 />

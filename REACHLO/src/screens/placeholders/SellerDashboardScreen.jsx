@@ -39,6 +39,7 @@ import PlacesAutocompleteProxy from '../../components/PlacesAutocompleteProxy';
 import PlacesAdjustMap from '../../components/PlacesAdjustMap';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import MapLocationPicker from '../../components/MapLocationPicker';
+import RatingModal from '../../components/RatingModal';
 
 const GOOGLE_PLACES_API_KEY = 'AIzaSyBqi9sSzxZk_uOmzlwESS0HPX5gRz9vnxo';
 
@@ -114,6 +115,7 @@ const CATEGORY_MAP = {
   'Home & Repair Services': ['Electricians', 'Plumbers', 'AC Repair', 'Painting', 'Pest Control', 'Cleaning Services'],
   'Travel & Tourism': ['Travel Agencies', 'Tour Packages', 'Visa Assistance', 'Hotel Booking', 'Pilgrimage Tours', 'Adventure Activities'],
   'Shopping & Retail': ['Clothing & Fashion', 'Electronics', 'Grocery Stores', 'Jewellery', 'Furniture', 'Gift Shops'],
+  'Others': ['Other'],
 };
 const CATEGORIES = Object.keys(CATEGORY_MAP);
 
@@ -429,6 +431,9 @@ export default function SellerDashboardScreen({ navigation }) {
   // Upgrade plans modal state
   const [plansModalVisible, setPlansModalVisible] = useState(false);
 
+  // Rating modal state
+  const [showRatingModal, setShowRatingModal] = useState(false);
+
   // Notifications state
   const [notificationsModalVisible, setNotificationsModalVisible] = useState(false);
   const [dismissedLeadIds, setDismissedLeadIds] = useState([]);
@@ -656,9 +661,16 @@ export default function SellerDashboardScreen({ navigation }) {
     }).start();
   }, [step]);
 
+  const isTabChanging = useRef(false);
   const handleTabChange = (tab) => {
+    if (activeTab === tab) return;
+    if (isTabChanging.current) return;
+    isTabChanging.current = true;
     contentFadeAnim.setValue(0);
     setActiveTab(tab);
+    setTimeout(() => {
+      isTabChanging.current = false;
+    }, 300);
   };
 
   const getFirstLetter = (name) => {
@@ -791,48 +803,100 @@ export default function SellerDashboardScreen({ navigation }) {
     if (step > 1) setStep(step - 1);
   };
 
-  const pickImage = async () => {
-    if (campImages.length >= MAX_CAMPAIGN_IMAGES) {
-      Alert.alert('Image Limit', `You can upload up to ${MAX_CAMPAIGN_IMAGES} images per campaign.`);
-      return;
-    }
-
+  const handleCameraCapture = async (mediaType) => {
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (permission.status !== 'granted') {
-        Alert.alert('Permission Required', 'Please allow access to your photo library to upload an image.');
+        Alert.alert('Permission Required', 'Please allow access to your camera.');
         return;
       }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: [mediaType],
         allowsEditing: false,
         quality: 1,
       });
+      await processMediaResult(result, mediaType);
+    } catch (err) {
+      console.warn('Camera error:', err);
+    }
+  };
 
-      if (!result.canceled && result.assets?.length > 0) {
-        setIsSmartCropping(true);
-        try {
-          const cropped = await smartCenterCrop(result.assets[0].uri);
+  const handleGalleryPick = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (permission.status !== 'granted') {
+        Alert.alert('Permission Required', 'Please allow access to your photo library.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images', 'videos'],
+        allowsEditing: false,
+        quality: 1,
+      });
+      await processMediaResult(result, result.assets?.[0]?.type === 'video' ? 'videos' : 'images');
+    } catch (err) {
+      console.warn('ImagePicker error:', err);
+    }
+  };
+
+  const processMediaResult = async (result, mediaType) => {
+    if (!result.canceled && result.assets?.length > 0) {
+      const asset = result.assets[0];
+      setIsSmartCropping(true);
+      try {
+        if (mediaType === 'videos' || asset.type === 'video') {
+           setImageReview({
+            uri: asset.uri,
+            meta: { fileName: asset.fileName || 'video.mp4', mimeType: asset.mimeType || 'video/mp4' },
+            sourceUri: asset.uri,
+            isVideo: true
+           });
+        } else {
+          const cropped = await smartCenterCrop(asset.uri);
           setImageReview({
             uri: cropped.uri,
             meta: {
               fileName: cropped.fileName,
               mimeType: cropped.mimeType,
             },
-            sourceUri: result.assets[0].uri,
+            sourceUri: asset.uri,
           });
-        } catch (err) {
-          console.warn('Smart crop failed:', err);
-          Alert.alert('Error', 'Could not process image. Please try again.');
-        } finally {
-          setIsSmartCropping(false);
         }
+      } catch (err) {
+        console.warn('Media processing failed:', err);
+        // Fallback for image
+        if (mediaType !== 'videos' && asset.type !== 'video') {
+           setImageReview({
+              uri: asset.uri,
+              meta: { fileName: asset.fileName || 'image.jpg', mimeType: asset.mimeType || 'image/jpeg' },
+              sourceUri: asset.uri,
+           });
+        } else {
+           Alert.alert('Error', 'Could not process media. Please try again.');
+        }
+      } finally {
+        setIsSmartCropping(false);
       }
-    } catch (err) {
-      console.warn('ImagePicker error:', err);
-      Alert.alert('Error', 'Could not open image picker. Please try again.');
     }
+  };
+
+  const pickImage = () => {
+    if (campImages.length >= MAX_CAMPAIGN_IMAGES) {
+      Alert.alert('Media Limit', `You can upload up to ${MAX_CAMPAIGN_IMAGES} media files per campaign.`);
+      return;
+    }
+
+    Alert.alert(
+      'Upload Media',
+      'Choose the source of your media',
+      [
+        { text: 'Take Photo', onPress: () => handleCameraCapture('images') },
+        { text: 'Take Video', onPress: () => handleCameraCapture('videos') },
+        { text: 'Choose from Gallery', onPress: handleGalleryPick },
+        { text: 'Cancel', style: 'cancel' }
+      ],
+      { cancelable: true }
+    );
   };
 
   const confirmImageReview = () => {
@@ -1118,11 +1182,14 @@ export default function SellerDashboardScreen({ navigation }) {
               </View>
             )}
           </Pressable>
-          <View style={[styles.avatar, { backgroundColor: 'rgba(255,255,255,0.7)', borderWidth: 1, borderColor: '#38BDF8' }]}>
+          <Pressable 
+            onPress={() => handleTabChange('Profile')}
+            style={[styles.avatar, { backgroundColor: 'rgba(255,255,255,0.7)', borderWidth: 1, borderColor: '#38BDF8' }]}
+          >
             <Text style={[styles.avatarText, { color: '#2563EB' }]}>
               {getFirstLetter(user?.name)}
             </Text>
-          </View>
+          </Pressable>
         </View>
       </View>
 
@@ -1451,24 +1518,48 @@ export default function SellerDashboardScreen({ navigation }) {
 
                 {/* Help & Support */}
                 <Pressable 
-                  onPress={() => Alert.alert('Help & Support', 'For seller assistance, email partner@reachlo.com')}
+                  onPress={() => navigation.navigate('HelpSupport')}
                   style={({ pressed }) => [styles.sellerOptionRow, pressed && styles.sellerOptionPressed]}
                 >
                   <View style={styles.sellerOptionLeft}>
-                    <Ionicons name="help-circle-outline" size={20} color="#2563EB" style={styles.sellerOptionIcon} />
+                    <Ionicons name="help-buoy-outline" size={20} color="#2563EB" style={styles.sellerOptionIcon} />
                     <Text style={styles.sellerOptionLabelText}>Help & Support</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                </Pressable>
+
+                {/* Privacy Policy */}
+                <Pressable 
+                  onPress={() => navigation.navigate('PrivacyPolicy')}
+                  style={({ pressed }) => [styles.sellerOptionRow, pressed && styles.sellerOptionPressed]}
+                >
+                  <View style={styles.sellerOptionLeft}>
+                    <Ionicons name="shield-checkmark-outline" size={20} color="#2563EB" style={styles.sellerOptionIcon} />
+                    <Text style={styles.sellerOptionLabelText}>Privacy Policy</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                 </Pressable>
 
                 {/* About Reachlo */}
                 <Pressable 
-                  onPress={() => Alert.alert('About Reachlo', 'Reachlo Seller Dashboard v1.0.0. Grow Your Business.')}
+                  onPress={() => navigation.navigate('AboutReachlo')}
                   style={({ pressed }) => [styles.sellerOptionRow, pressed && styles.sellerOptionPressed]}
                 >
                   <View style={styles.sellerOptionLeft}>
                     <Ionicons name="information-circle-outline" size={20} color="#2563EB" style={styles.sellerOptionIcon} />
-                    <Text style={styles.sellerOptionLabelText}>About Reachlo</Text>
+                    <Text style={styles.sellerOptionLabelText}>About REACHLO</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                </Pressable>
+
+                {/* Rate REACHLO */}
+                <Pressable 
+                  onPress={() => setShowRatingModal(true)}
+                  style={({ pressed }) => [styles.sellerOptionRow, pressed && styles.sellerOptionPressed]}
+                >
+                  <View style={styles.sellerOptionLeft}>
+                    <Ionicons name="star-outline" size={20} color="#EAB308" style={styles.sellerOptionIcon} />
+                    <Text style={styles.sellerOptionLabelText}>Rate REACHLO</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                 </Pressable>
@@ -1807,7 +1898,7 @@ export default function SellerDashboardScreen({ navigation }) {
                         ) : (
                           <>
                             <View style={styles.uploadDivider} />
-                            <Text style={styles.uploadAreaTitle}>Campaign Image</Text>
+                            <Text style={styles.uploadAreaTitle}>Campaign Image *</Text>
                             <Text style={styles.uploadAreaSubtitle}>Drag or Upload</Text>
                             <Text style={styles.uploadAreaHint}>Recommended: 1200×900 (4:3)</Text>
                             <Text style={styles.uploadAreaFormats}>PNG, JPG</Text>
@@ -1818,7 +1909,7 @@ export default function SellerDashboardScreen({ navigation }) {
                     )}
 
                     <View style={styles.cardInput}>
-                      <Text style={styles.cardInputLabel}>Campaign Title</Text>
+                      <Text style={styles.cardInputLabel}>Campaign Title *</Text>
                       <TextInput
                         value={campTitle}
                         onChangeText={setCampTitle}
@@ -1829,7 +1920,7 @@ export default function SellerDashboardScreen({ navigation }) {
                     </View>
 
                     <View style={styles.cardInput}>
-                      <Text style={styles.cardInputLabel}>Description</Text>
+                      <Text style={styles.cardInputLabel}>Description *</Text>
                       <TextInput
                         value={campDesc}
                         onChangeText={setCampDesc}
@@ -1842,7 +1933,7 @@ export default function SellerDashboardScreen({ navigation }) {
                     </View>
 
                     <View style={styles.cardInput}>
-                      <Text style={styles.cardInputLabel}>Offer Line</Text>
+                      <Text style={styles.cardInputLabel}>Offer Line *</Text>
                       <TextInput
                         value={campOfferLine}
                         onChangeText={setCampOfferLine}
@@ -1960,7 +2051,7 @@ export default function SellerDashboardScreen({ navigation }) {
                   <View style={styles.stepContent}>
                     <Text style={styles.premiumInputSectionTitle}>Audience</Text>
 
-                    <Text style={styles.premiumLabel}>Category</Text>
+                    <Text style={styles.premiumLabel}>Category *</Text>
                     <View style={styles.categoryGrid}>
                       {CATEGORIES.map((cat) => (
                         <Pressable
@@ -1987,7 +2078,7 @@ export default function SellerDashboardScreen({ navigation }) {
                       ))}
                     </View>
 
-                    <Text style={styles.premiumLabel}>Subcategory</Text>
+                    <Text style={styles.premiumLabel}>Subcategory *</Text>
                     <View style={styles.categoryGrid}>
                       {(CATEGORY_MAP[campCategory] || []).map((sub) => (
                         <Pressable
@@ -2010,8 +2101,21 @@ export default function SellerDashboardScreen({ navigation }) {
                         </Pressable>
                       ))}
                     </View>
+                    
+                    {campCategory === 'Others' && (
+                      <View style={[styles.cardInput, { marginTop: 12 }]}>
+                        <Text style={styles.cardInputLabel}>Custom Category Name *</Text>
+                        <TextInput
+                          value={campSubCategory === 'Other' ? '' : campSubCategory}
+                          onChangeText={setCampSubCategory}
+                          placeholder="e.g. Pet Grooming"
+                          placeholderTextColor="#94A3B8"
+                          style={styles.cardInputField}
+                        />
+                      </View>
+                    )}
 
-                    <Text style={styles.premiumLabel}>Target Cities</Text>
+                    <Text style={styles.premiumLabel}>Target Cities *</Text>
                     <View style={styles.cardInput}>
                       {/* All over India toggle */}
                       <Pressable
@@ -2109,7 +2213,7 @@ export default function SellerDashboardScreen({ navigation }) {
                       />
                     </View>
 
-                    <Text style={styles.premiumLabel}>Campaign Start Date</Text>
+                    <Text style={styles.premiumLabel}>Campaign Start Date *</Text>
                     <Pressable
                       onPress={() => { setShowStartCalendar(!showStartCalendar); setShowEndCalendar(false); setCalendarDate(campStartDate ? new Date(campStartDate) : new Date()); }}
                       style={styles.cardInput}
@@ -2158,7 +2262,7 @@ export default function SellerDashboardScreen({ navigation }) {
                       );
                     })()}
 
-                    <Text style={styles.premiumLabel}>Campaign End Date</Text>
+                    <Text style={styles.premiumLabel}>Campaign End Date *</Text>
                     <Pressable
                       onPress={() => { setShowEndCalendar(!showEndCalendar); setShowStartCalendar(false); setCalendarDate(campEndDate ? new Date(campEndDate) : (campStartDate ? new Date(campStartDate) : new Date())); }}
                       style={styles.cardInput}
@@ -2459,6 +2563,12 @@ export default function SellerDashboardScreen({ navigation }) {
           </BlurView>
         </View>
       </Modal>
+
+      <RatingModal
+        visible={showRatingModal}
+        onClose={() => setShowRatingModal(false)}
+        userRole="seller"
+      />
     </SafeAreaView>
   );
 }

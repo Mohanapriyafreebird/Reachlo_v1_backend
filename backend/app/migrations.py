@@ -268,6 +268,20 @@ def run_migrations() -> None:
             )
         """)
 
+    # ------------------------------------------------------------------ app_feedbacks
+    if "app_feedbacks" in table_names:
+        columns = {col["name"] for col in inspector.get_columns("app_feedbacks")}
+        if "rating" not in columns:
+            alterations.append("ALTER TABLE app_feedbacks ADD COLUMN rating INT NOT NULL")
+        if "feedback_text" not in columns:
+            alterations.append("ALTER TABLE app_feedbacks ADD COLUMN feedback_text TEXT NULL")
+        if "category" not in columns:
+            alterations.append("ALTER TABLE app_feedbacks ADD COLUMN category VARCHAR(100) NULL")
+        if "status" not in columns:
+            alterations.append("ALTER TABLE app_feedbacks ADD COLUMN status VARCHAR(50) DEFAULT 'NEW'")
+        if "created_at" not in columns:
+            alterations.append("ALTER TABLE app_feedbacks ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP")
+
     if alterations:
         with engine.begin() as conn:
             for statement in alterations:

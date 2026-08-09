@@ -130,7 +130,15 @@ export default function SellerRegisterStep2Screen({ route, navigation }) {
         navigation.replace('DiscoveryFeed');
       }
     } catch (err) {
-      showToast(err.message || 'Registration failed. Please try again.', 'error');
+      const msg = err.message || '';
+      // Show specific error messages for duplicate email/phone
+      if (msg.toLowerCase().includes('email')) {
+        showToast('This email address is already registered. Please go back and use a different email.', 'error');
+      } else if (msg.toLowerCase().includes('mobile') || msg.toLowerCase().includes('phone') || msg.toLowerCase().includes('number')) {
+        showToast('This mobile number is already registered. Please go back and use a different number.', 'error');
+      } else {
+        showToast(msg || 'Registration failed. Please try again.', 'error');
+      }
     } finally {
       setLoading(false);
     }

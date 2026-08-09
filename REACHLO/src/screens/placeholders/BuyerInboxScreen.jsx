@@ -307,6 +307,9 @@ export default function BuyerInboxScreen() {
               <Text style={styles.emptySubtext}>
                 When you express interest in campaigns or message businesses, your conversations will appear here.
               </Text>
+              <Pressable style={styles.emptyCta} onPress={() => navigation.navigate('DiscoveryFeed')}>
+                <Text style={styles.emptyCtaText}>Explore Offers</Text>
+              </Pressable>
             </View>
           )
         }
@@ -587,5 +590,17 @@ const styles = StyleSheet.create({
     color: '#64748B',
     textAlign: 'center',
     lineHeight: 22,
+    marginBottom: 24,
+  },
+  emptyCta: {
+    backgroundColor: '#2563EB',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  emptyCtaText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 16,
   }
 });

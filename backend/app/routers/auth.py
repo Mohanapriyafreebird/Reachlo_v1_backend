@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from app.database import get_db
 from app.models import User, Business, LoginHistory
 from app.schemas import UserRegister, UserLogin, Token, UserUpdate, UserResponse
@@ -62,12 +63,21 @@ def register(user_in: UserRegister, db: Session = Depends(get_db)):
     AI enrichment (category detection, business analysis) runs in a background thread
     so the registration response is returned immediately without waiting for Gemini.
     """
-    # Check if user already exists
-    existing_user = db.query(User).filter(User.email == user_in.email.lower()).first()
-    if existing_user:
+    # Check if email already exists
+    existing_email = db.query(User).filter(User.email == user_in.email.lower()).first()
+    if existing_email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email is already registered."
+            detail="This email address is already registered. Please use a different email or log in."
+        )
+
+    # Check if phone number already exists
+    clean_phone = user_in.phone.replace("+91", "").replace(" ", "").strip()
+    existing_phone = db.query(User).filter(User.phone == clean_phone).first()
+    if existing_phone:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This mobile number is already registered. Please use a different number or log in."
         )
 
     # Create new user
@@ -75,13 +85,33 @@ def register(user_in: UserRegister, db: Session = Depends(get_db)):
     new_user = User(
         name=user_in.name,
         email=user_in.email.lower(),
-        phone=user_in.phone,
+        phone=clean_phone,
         password_hash=hashed_password,
         role=user_in.role,
-        is_active=True
+        is_active=True,
+        city=user_in.city
     )
     db.add(new_user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as e:
+        db.rollback()
+        err_str = str(e).lower()
+        if "email" in err_str:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This email address is already registered. Please use a different email or log in."
+            )
+        elif "phone" in err_str:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This mobile number is already registered. Please use a different number or log in."
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Registration failed. An account with these details may already exist."
+            )
     new_user = db.query(User).filter(User.email == user_in.email.lower()).first()
 
     # If the user is a SELLER, create the business profile immediately with default category,
@@ -287,7 +317,12 @@ def change_password(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if not verify_password(payload.current_password, current_user.password_hash):
+    # Re-fetch the user within this db session to ensure it is tracked
+    user = db.query(User).filter(User.id == current_user.id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+
+    if not verify_password(payload.current_password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Incorrect current password"
@@ -297,9 +332,10 @@ def change_password(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Password must be at least 8 characters."
         )
-    
-    current_user.password_hash = get_password_hash(payload.new_password)
+
+    user.password_hash = get_password_hash(payload.new_password)
     db.commit()
+    db.refresh(user)
     return {"message": "Password updated successfully."}
 
 
@@ -326,6 +362,7 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db))
     
     user.password_hash = get_password_hash(payload.new_password)
     db.commit()
+    db.refresh(user)
     return {"message": "Password reset successfully."}
 
 
