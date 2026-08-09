@@ -38,6 +38,8 @@ import apiService from '../../services/apiService';
 import { resolveMediaUrl } from '../../config/apiConfig';
 import { useAuth } from '../../context/AuthContext';
 import BusinessVerifiedBadge from '../../components/BusinessVerifiedBadge';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import RatingModal from '../../components/RatingModal';
 
 // ─────────────────────────────────────────────────────────
 // AdThumbnail — Real split-panel ad layout renderer
@@ -267,6 +269,9 @@ export default function AIDraftReviewScreen({ route }) {
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState('info');
 
+  // Rating Modal
+  const [showRatingModal, setShowRatingModal] = useState(false);
+
   const showToast = (msg, type = 'error') => {
     setToastMessage(msg);
     setToastType(type);
@@ -389,9 +394,16 @@ export default function AIDraftReviewScreen({ route }) {
         price: price.trim() ? parseFloat(price.trim()) : null,
       });
       showToast('Campaign published successfully!', 'success');
-      setTimeout(() => {
-        navigation.navigate('SellerDashboard');
-      }, 1000);
+      
+      const hasRated = await AsyncStorage.getItem('has_rated_reachlo_seller');
+      if (!hasRated) {
+        await AsyncStorage.setItem('has_rated_reachlo_seller', 'true');
+        setShowRatingModal(true);
+      } else {
+        setTimeout(() => {
+          navigation.navigate('SellerDashboard');
+        }, 1000);
+      }
     } catch (e) {
       setPublishing(false);
       showToast(e.message || 'Failed to publish campaign.');
@@ -566,6 +578,15 @@ export default function AIDraftReviewScreen({ route }) {
           style={styles.publishBtn}
         />
       </View>
+
+      <RatingModal 
+        visible={showRatingModal} 
+        onClose={() => {
+          setShowRatingModal(false);
+          navigation.navigate('SellerDashboard');
+        }} 
+        userRole="seller" 
+      />
     </SafeAreaView>
   );
 }

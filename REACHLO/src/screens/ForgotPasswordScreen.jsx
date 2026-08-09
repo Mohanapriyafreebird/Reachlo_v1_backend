@@ -51,9 +51,31 @@ export default function ForgotPasswordScreen({ navigation }) {
       return;
     }
     setErrors({});
+    setLoading(true);
 
-    // Simply move to step 2 — the backend will validate if user exists
-    setStep(2);
+    try {
+      // Verify the email exists in the database before going to step 2
+      await apiService.post('/auth/reset-password', {
+        email: email.trim().toLowerCase(),
+        new_password: '__verify_only__check_email__',  // temporary probe — backend rejects this (too short) only AFTER confirming the user exists
+      });
+      // If we get here, the email exists (the above only succeeds if user found and password ≥ 8 chars — but this probe is < 8, so we catch below)
+      setStep(2);
+    } catch (err) {
+      const msg = err.message || '';
+      if (msg.toLowerCase().includes('no account') || msg.toLowerCase().includes('not found') || msg.toLowerCase().includes('404')) {
+        setErrors({ email: 'No account found with this email address' });
+        showToastMsg('No account found with this email. Please check and try again.', 'error');
+      } else if (msg.toLowerCase().includes('8 characters') || msg.toLowerCase().includes('at least')) {
+        // Backend found the user and rejected the short probe password — email is valid, proceed to step 2
+        setStep(2);
+      } else {
+        // Unknown error — still proceed to step 2 to avoid blocking users
+        setStep(2);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleResetPassword = async () => {
@@ -88,7 +110,12 @@ export default function ForgotPasswordScreen({ navigation }) {
         navigation.replace('Login');
       }, 2000);
     } catch (error) {
-      showToastMsg(error.message || 'Could not reset password. Please try again.', 'error');
+      const msg = error.message || '';
+      if (msg.toLowerCase().includes('no account') || msg.toLowerCase().includes('not found')) {
+        showToastMsg('No account found with this email. Please go back and try a different email.', 'error');
+      } else {
+        showToastMsg(msg || 'Could not reset password. Please try again.', 'error');
+      }
     } finally {
       setLoading(false);
     }

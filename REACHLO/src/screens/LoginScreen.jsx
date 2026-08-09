@@ -67,6 +67,19 @@ export default function LoginScreen({ navigation }) {
   const [showPassword, setShowPassword] = useState(false);
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
 
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+
+  const validateField = (field, val) => {
+    if (field === 'email') {
+      if (!val.trim()) setEmailError('Email or Phone is required');
+      else setEmailError('');
+    } else if (field === 'password') {
+      if (!val) setPasswordError('Password is required');
+      else setPasswordError('');
+    }
+  };
+
   const [loading, setLoading] = useState(false);
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
@@ -342,11 +355,12 @@ export default function LoginScreen({ navigation }) {
                         autoCapitalize="none"
                         returnKeyType="next"
                         onFocus={() => setEmailFocused(true)}
-                        onBlur={() => setEmailFocused(false)}
+                        onBlur={() => { setEmailFocused(false); validateField('email', email); }}
                         onSubmitEditing={() => passwordRef.current?.focus()}
                         editable={!loading}
                       />
                     </View>
+                    {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
 
                     {/* Password Input */}
                     <View style={[styles.inputContainer, passFocused && styles.inputFocused, { marginTop: 16 }]}>
@@ -361,7 +375,7 @@ export default function LoginScreen({ navigation }) {
                         secureTextEntry={!showPassword}
                         returnKeyType="done"
                         onFocus={() => setPassFocused(true)}
-                        onBlur={() => setPassFocused(false)}
+                        onBlur={() => { setPassFocused(false); validateField('password', password); }}
                         onSubmitEditing={handleSubmit}
                         editable={!loading}
                       />
@@ -373,6 +387,7 @@ export default function LoginScreen({ navigation }) {
                         />
                       </Pressable>
                     </View>
+                    {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
 
                     <View style={styles.forgotContainer}>
                       <Pressable onPress={() => navigation.navigate('ForgotPassword')} disabled={loading}>
@@ -426,6 +441,16 @@ export default function LoginScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 4,
+  },
+  inputFocused: {
+    borderColor: '#2563EB',
     backgroundColor: '#FFFFFF',
   },
   keyboardView: {

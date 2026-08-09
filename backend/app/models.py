@@ -36,6 +36,7 @@ class User(Base):
     chat_threads_as_buyer = relationship("ChatThread", back_populates="buyer", foreign_keys="ChatThread.buyer_id", cascade="all, delete-orphan")
     chat_threads_as_seller = relationship("ChatThread", back_populates="seller", foreign_keys="ChatThread.seller_id", cascade="all, delete-orphan")
     sent_messages = relationship("ChatMessage", back_populates="sender", foreign_keys="ChatMessage.sender_id", cascade="all, delete-orphan")
+    feedbacks = relationship("AppFeedback", back_populates="user", cascade="all, delete-orphan")
 
 
 class Business(Base):
@@ -296,6 +297,23 @@ class LoginHistory(Base):
     user = relationship("User", back_populates="login_history")
 
 
+class AppFeedback(Base):
+    __tablename__ = "app_feedbacks"
+    __table_args__ = {'mysql_charset': 'utf8mb4', 'mysql_collate': 'utf8mb4_0900_ai_ci'}
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(10, collation="utf8mb4_0900_ai_ci"), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    role = Column(String(50), nullable=False) # 'BUYER' or 'SELLER'
+    rating = Column(Integer, nullable=False)
+    feedback_text = Column(Text, nullable=True)
+    category = Column(String(100), nullable=True)
+    status = Column(String(50), default="NEW") # 'NEW', 'REVIEWED', 'RESOLVED'
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", back_populates="feedbacks")
+
+
 class ChatThread(Base):
     """
     One chat thread is created per (buyer, campaign) pair when a buyer claims a deal.
@@ -341,3 +359,5 @@ class ChatMessage(Base):
     # Relationships
     thread = relationship("ChatThread", back_populates="messages")
     sender = relationship("User", back_populates="sent_messages", foreign_keys=[sender_id])
+
+

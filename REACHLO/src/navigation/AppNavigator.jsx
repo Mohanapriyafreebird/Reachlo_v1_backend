@@ -20,6 +20,9 @@ import ChatScreen from '../screens/placeholders/ChatScreen';
 import SellerMessagesScreen from '../screens/placeholders/SellerMessagesScreen';
 import BuyerInboxScreen from '../screens/placeholders/BuyerInboxScreen';
 import AllCategoriesScreen from '../screens/placeholders/AllCategoriesScreen';
+import AboutScreen from '../screens/AboutScreen';
+import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen';
+import HelpSupportScreen from '../screens/HelpSupportScreen';
 
 const Stack = createStackNavigator();
 
@@ -146,6 +149,23 @@ export default function AppNavigator() {
       <Stack.Screen
         name="AllCategories"
         component={AllCategoriesScreen}
+        options={{ cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS }}
+      />
+
+      {/* New Static & Support Screens */}
+      <Stack.Screen
+        name="AboutReachlo"
+        component={AboutScreen}
+        options={{ cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS }}
+      />
+      <Stack.Screen
+        name="PrivacyPolicy"
+        component={PrivacyPolicyScreen}
+        options={{ cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS }}
+      />
+      <Stack.Screen
+        name="HelpSupport"
+        component={HelpSupportScreen}
         options={{ cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS }}
       />
     </Stack.Navigator>

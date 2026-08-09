@@ -6,7 +6,7 @@ from datetime import datetime
 class UserRegister(BaseModel):
     name: str = Field(..., min_length=2, max_length=100)
     email: EmailStr
-    phone: str = Field(..., min_length=10, max_length=20)
+    phone: str = Field(..., pattern="^[6-9]\\d{9}$")
     password: str = Field(..., min_length=8)
     role: str = Field("BUYER", pattern="^(BUYER|SELLER|ADMIN)$")
     # city is kept optional for backward compat with existing buyer registration frontend
@@ -318,3 +318,22 @@ class UnreadCountResponse(BaseModel):
 class PushTokenUpdate(BaseModel):
     """Sent by the client after obtaining an Expo push token."""
     expo_push_token: str
+
+# --- APP FEEDBACK SCHEMAS ---
+class AppFeedbackCreate(BaseModel):
+    rating: int = Field(..., ge=1, le=5)
+    feedback_text: Optional[str] = None
+    category: Optional[str] = None
+
+class AppFeedbackResponse(BaseModel):
+    id: int
+    user_id: str
+    role: str
+    rating: int
+    feedback_text: Optional[str] = None
+    category: Optional[str] = None
+    status: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

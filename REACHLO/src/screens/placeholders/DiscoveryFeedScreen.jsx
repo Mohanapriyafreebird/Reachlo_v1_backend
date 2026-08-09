@@ -36,6 +36,7 @@ import { BlurView } from 'expo-blur';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import chatService from '../../services/chatService';
 import CampaignDetailScreen from './CampaignDetailScreen';
+import RatingModal from '../../components/RatingModal';
 // Service Data with Emoji icons and offer counts as specified
 const SERVICES_DATA = [
   {
@@ -231,6 +232,15 @@ const SERVICES_DATA = [
       'Furniture',
       'Gift Shops'
     ]
+  },
+  {
+    id: 'others',
+    title: 'Others',
+    icon: require('../../../assets/ICONS/CATEGORY/shopping.jpg'),
+    offersCount: 0,
+    subServices: [
+      'Other'
+    ]
   }
 ];
 
@@ -335,6 +345,9 @@ export default function DiscoveryFeedScreen() {
   const navigation = useNavigation();
   const route = useRoute();
 
+  // Rating Modal
+  const [showRatingModal, setShowRatingModal] = useState(false);
+
   useEffect(() => {
     if (route.params?.selectedCategoryId) {
       const categoryId = route.params.selectedCategoryId;
@@ -366,6 +379,7 @@ export default function DiscoveryFeedScreen() {
   // ── New Message Notification (10-second popup on login) ─────────────────
   const [msgNotifVisible, setMsgNotifVisible] = useState(false);
   const [msgNotifSenders, setMsgNotifSenders] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const msgNotifAnim = useRef(new Animated.Value(0)).current;
   const msgNotifTimer = useRef(null);
 
@@ -390,6 +404,7 @@ export default function DiscoveryFeedScreen() {
         const threads = await apiService.get('/chat/threads');
         // Find threads where the buyer has unread messages from sellers
         const unreadThreads = (threads || []).filter(t => (t.buyer_unread_count || 0) > 0);
+        setUnreadCount(unreadThreads.reduce((sum, t) => sum + (t.buyer_unread_count || 0), 0));
         if (unreadThreads.length === 0) return;
         // Get unique seller names from those threads
         const senderNames = [...new Set(
@@ -679,13 +694,20 @@ export default function DiscoveryFeedScreen() {
     }).start();
   }, [activeTab, selectedService, selectedSubService]);
 
+  const isTabChanging = useRef(false);
   const handleTabChange = (tab) => {
+    if (activeTab === tab) return;
+    if (isTabChanging.current) return;
+    isTabChanging.current = true;
     if (tab === 'Home') {
       setSelectedService(null);
       setSelectedSubService(null);
     }
     contentFadeAnim.setValue(0);
     setActiveTab(tab);
+    setTimeout(() => {
+      isTabChanging.current = false;
+    }, 300);
   };
 
   const handlePickProfileImage = async () => {
@@ -861,12 +883,25 @@ export default function DiscoveryFeedScreen() {
     });
   };
 
+  const triggerRatingModalIfNeeded = async () => {
+    try {
+      const hasRated = await AsyncStorage.getItem('has_rated_reachlo_buyer');
+      if (!hasRated) {
+        await AsyncStorage.setItem('has_rated_reachlo_buyer', 'true');
+        setShowRatingModal(true);
+      }
+    } catch (e) {
+      console.warn('Error checking rating status', e);
+    }
+  };
+
   // Quick Action triggers
   const handleQuickCall = async (camp) => {
     try {
       await createLead(camp, "Called seller directly via CTA");
       const phone = camp.seller_phone || camp.seller_whatsapp || '+910000000000';
       Linking.openURL(`tel:${phone}`);
+      triggerRatingModalIfNeeded();
     } catch (e) {
       Alert.alert('Error', 'Could not register your interest. Please try again.');
     }
@@ -878,6 +913,7 @@ export default function DiscoveryFeedScreen() {
       const phone = camp.seller_whatsapp || camp.seller_phone || '+910000000000';
       const text = `Hi, I am interested in your offer on Reachlo: ${camp.offerLine || camp.title}`;
       Linking.openURL(`whatsapp://send?text=${encodeURIComponent(text)}&phone=${phone}`);
+      triggerRatingModalIfNeeded();
     } catch (e) {
       Alert.alert('Error', 'Could not register your interest. Please try again.');
     }
@@ -897,6 +933,7 @@ export default function DiscoveryFeedScreen() {
       if (response && response.id) {
         const thread = await chatService.createThread(response.id);
         setSelectedCampaign(null);
+        triggerRatingModalIfNeeded();
         // Pass full campaign + business info so ChatScreen header shows the
         // actual business name (not the generic fallback "Business")
         navigation.navigate('ChatScreen', {
@@ -1057,6 +1094,11 @@ export default function DiscoveryFeedScreen() {
             </Pressable>
             <Pressable style={styles.headerIconBtn}>
               <Ionicons name="notifications-outline" size={22} color="#2563EB" />
+              {unreadCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+                </View>
+              )}
             </Pressable>
             <Pressable onPress={() => handleTabChange('Profile')}>
               <LinearGradient colors={['#38BDF8', '#2563EB']} style={styles.avatarCircle}>
@@ -1504,7 +1546,7 @@ export default function DiscoveryFeedScreen() {
 
                   {/* Help & Support */}
                   <Pressable 
-                    onPress={() => Alert.alert('Help & Support', 'Reach us at support@reachlo.com for any queries.')}
+                    onPress={() => navigation.navigate('HelpSupport')}
                     style={({ pressed }) => [styles.settingsOptionRow, pressed && styles.settingsOptionPressed]}
                   >
                     <View style={styles.optionLeft}>
@@ -1514,14 +1556,38 @@ export default function DiscoveryFeedScreen() {
                     <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                   </Pressable>
 
+                  {/* Privacy Policy */}
+                  <Pressable 
+                    onPress={() => navigation.navigate('PrivacyPolicy')}
+                    style={({ pressed }) => [styles.settingsOptionRow, pressed && styles.settingsOptionPressed]}
+                  >
+                    <View style={styles.optionLeft}>
+                      <Ionicons name="shield-checkmark-outline" size={20} color="#2563EB" style={styles.optionIcon} />
+                      <Text style={styles.optionLabelText}>Privacy Policy</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                  </Pressable>
+
                   {/* About Reachlo */}
                   <Pressable 
-                    onPress={() => Alert.alert('About Reachlo', 'Version 1.0.0 (Premium). Grow Your Business with local offers.')}
+                    onPress={() => navigation.navigate('AboutReachlo')}
                     style={({ pressed }) => [styles.settingsOptionRow, pressed && styles.settingsOptionPressed]}
                   >
                     <View style={styles.optionLeft}>
                       <Ionicons name="information-circle-outline" size={20} color="#2563EB" style={styles.optionIcon} />
-                      <Text style={styles.optionLabelText}>About Reachlo</Text>
+                      <Text style={styles.optionLabelText}>About REACHLO</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                  </Pressable>
+
+                  {/* Rate REACHLO */}
+                  <Pressable 
+                    onPress={() => setShowRatingModal(true)}
+                    style={({ pressed }) => [styles.settingsOptionRow, pressed && styles.settingsOptionPressed]}
+                  >
+                    <View style={styles.optionLeft}>
+                      <Ionicons name="star-outline" size={20} color="#2563EB" style={styles.optionIcon} />
+                      <Text style={styles.optionLabelText}>Rate REACHLO</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                   </Pressable>
@@ -1692,6 +1758,12 @@ export default function DiscoveryFeedScreen() {
           </Pressable>
         </BlurView>
       </View>
+      {/* RATE REACHLO MODAL */}
+      <RatingModal
+        visible={showRatingModal}
+        onClose={() => setShowRatingModal(false)}
+        userRole="buyer"
+      />
     </SafeAreaView>
   );
 }
@@ -1748,6 +1820,23 @@ const styles = StyleSheet.create({
     marginRight: 12,
     borderWidth: 1,
     borderColor: 'rgba(37, 99, 235, 0.15)',
+  },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#EF4444',
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   headerTextContainer: {
     flex: 1,
