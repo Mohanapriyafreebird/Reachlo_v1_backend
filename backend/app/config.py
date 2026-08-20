@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str | None = None
     HUGGINGFACE_API_KEY: str | None = None
     IDEOGRAM_API_KEY: str | None = None
+    # Cloudflare Workers AI (primary image generator — 10K neurons/day free)
+    CF_ACCOUNT_ID: str | None = None
+    CF_API_TOKEN: str | None = None
+    # Groq (optional — fast LLM fallback)
+    GROQ_API_KEY: str | None = None
     # S3 config (optional — uses local uploads dir as fallback for MVP)
     AWS_S3_BUCKET: str | None = None
     AWS_ACCESS_KEY_ID: str | None = None

@@ -64,7 +64,7 @@ export const API_CONFIG = {
   BASE_URL: BASE_URL,
   MEDIA_BASE_URL: MEDIA_BASE_URL,
   WS_BASE_URL: WS_BASE_URL,
-  TIMEOUT: 60000,
+  TIMEOUT: 180000,
 };
 
 /** Resolve relative upload paths (e.g. /uploads/abc.jpg) to a full URL for Image components. */

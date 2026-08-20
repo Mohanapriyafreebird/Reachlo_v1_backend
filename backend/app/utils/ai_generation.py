@@ -6,17 +6,24 @@ Architecture:
   - Campaign generation uses ONE Gemini API call that reasons internally and returns
     a structured JSON containing: business_analysis, marketing_strategy, buyer_psychology,
     creative_brief, campaign content, and an optimized image_prompt.
-  - The image_prompt is then enriched with universal advertising quality anchors
-    (programmatically) before being sent to Ideogram v2 for premium ad-quality output.
+  - The image_prompt is enriched with quality anchors before being sent to the image API.
+
+Image Generation Priority (generate_campaign_image):
+  1. Cloudflare Workers AI (FLUX.1-schnell) — primary, free 10K neurons/day, fast edge inference
+  2. Ideogram v2 API                        — secondary, best text rendering, paid
+  3. Pollinations AI (FLUX)                 — free fallback, always available
 
 Key functions:
-  detect_category()          — Gemini: classify business → category + sub_category (at registration)
-  analyze_business()         — Gemini: deep business analysis cached in businesses.ai_business_analysis
-  generate_full_campaign()   — Single Gemini call: all reasoning + content + image_prompt
-  build_flux_prompt()        — Programmatic: append quality/style anchors to AI-composed prompt
-  build_ideogram_prompt()    — Programmatic: build Ideogram-native prompt from Gemini output
-  run_hallucination_guard()  — Pure Python text scan: flag suspicious content
-  generate_campaign_image()  — Ideogram v2 API: create 4:3 premium ad thumbnail
+  detect_category()                  — Gemini: classify business → category + sub_category
+  analyze_business()                 — Gemini: deep business analysis cached in DB
+  generate_full_campaign()           — Single Gemini call: all reasoning + content + image_prompt
+  build_flux_prompt()                — Programmatic: append quality/style anchors (for FLUX)
+  build_cloudflare_prompt()          — Programmatic: build Cloudflare FLUX-optimized prompt
+  build_ideogram_prompt()            — Programmatic: build Ideogram-native prompt
+  run_hallucination_guard()          — Pure Python text scan: flag suspicious content
+  generate_image_with_cloudflare()   — Cloudflare Workers AI: FLUX.1-schnell inference
+  generate_campaign_image()          — Full generation pipeline with priority fallback
+  compose_campaign_ad_thumbnail()    — Pillow: compose final ad poster with text overlay
 
 Naming convention:
   business_description  = what the seller's BUSINESS provides (businesses.business_description)
@@ -98,10 +105,17 @@ FLUX_NEGATIVE_PROMPT = (
 #       → falls back to "Other" _default
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Category key normalizer — maps DB values to archetype dict keys
+# DB stores: "IT & Technology Services", "Education & Training", "Health & Wellness"
+# Archetype dict uses: "IT & Technology Services", "Education & Training", etc.
+# Keys here are kept identical to CATEGORY_LIST values so the lookup always works.
+# ---------------------------------------------------------------------------
+
 SUB_CATEGORY_VISUAL_ARCHETYPES: dict[str, dict[str, str]] = {
 
-    # ── IT & Technology ─────────────────────────────────────────────────────
-    "IT & Technology": {
+    # ── IT & Technology Services ──────────────────────────────────────────
+    "IT & Technology Services": {
         "Website Development": (
             "a sleek modern laptop open on a clean wooden desk, displaying a glowing wireframe UI, "
             "dark navy blue fading to deep charcoal gradient background, "
@@ -141,16 +155,11 @@ SUB_CATEGORY_VISUAL_ARCHETYPES: dict[str, dict[str, str]] = {
         ),
     },
 
-    # ── Education ──────────────────────────────────────────────────────────
-    "Education": {
+    # ── Education & Training ───────────────────────────────────────────────
+    "Education & Training": {
         "Spoken English Classes": (
             "a beautiful open notebook with elegant typography, a premium fountain pen, "
             "clean sky blue fading to soft white gradient background, "
-            "bright warm natural lighting, premium education photography poster"
-        ),
-        "IELTS Coaching": (
-            "a sleek golden compass resting on a stack of premium modern textbooks, "
-            "clean royal blue to white gradient background, "
             "bright studio lighting, premium IELTS coaching advertisement photography"
         ),
         "UPSC Coaching": (
@@ -180,8 +189,8 @@ SUB_CATEGORY_VISUAL_ARCHETYPES: dict[str, dict[str, str]] = {
         ),
     },
 
-    # ── Health ─────────────────────────────────────────────────────────────
-    "Health": {
+    # ── Health & Wellness ──────────────────────────────────────────────────
+    "Health & Wellness": {
         "Gyms": (
             "a sleek matte black kettlebell resting on a pristine wooden floor, "
             "dark charcoal to near-black gradient background with warm orange rim accent, "
@@ -219,8 +228,8 @@ SUB_CATEGORY_VISUAL_ARCHETYPES: dict[str, dict[str, str]] = {
         ),
     },
 
-    # ── Beauty ─────────────────────────────────────────────────────────────
-    "Beauty": {
+    # ── Beauty & Personal Care ─────────────────────────────────────────────
+    "Beauty & Personal Care": {
         "Salons": (
             "elegant golden salon scissors and a sleek hairdryer on a marble vanity, "
             "soft blush pink fading to warm cream gradient background, "
@@ -258,8 +267,8 @@ SUB_CATEGORY_VISUAL_ARCHETYPES: dict[str, dict[str, str]] = {
         ),
     },
 
-    # ── Food ───────────────────────────────────────────────────────────────
-    "Food": {
+    # ── Food & Restaurants ─────────────────────────────────────────────────
+    "Food & Restaurants": {
         "Cafes": (
             "a beautifully crafted artisan coffee with perfect latte art in a ceramic cup, "
             "warm cream to soft brown gradient background, "
@@ -292,8 +301,8 @@ SUB_CATEGORY_VISUAL_ARCHETYPES: dict[str, dict[str, str]] = {
         ),
     },
 
-    # ── Events ─────────────────────────────────────────────────────────────
-    "Events": {
+    # ── Events & Entertainment ─────────────────────────────────────────────
+    "Events & Entertainment": {
         "Wedding Planners": (
             "elegant golden wedding rings resting on a pristine white silk pillow, "
             "warm deep gold fading to soft cream gradient background, "
@@ -326,6 +335,201 @@ SUB_CATEGORY_VISUAL_ARCHETYPES: dict[str, dict[str, str]] = {
         ),
     },
 
+    # ── Home Services ──────────────────────────────────────────────────────
+    "Home Services": {
+        "Cleaning Services": (
+            "a set of premium cleaning supplies — gleaming spray bottle and folded microfiber cloth on a marble surface, "
+            "clean white to soft sky blue gradient background, "
+            "bright natural studio light, home service brand photography ad poster"
+        ),
+        "Plumbing": (
+            "a polished chrome wrench and fresh copper pipe fitting resting on a clean white surface, "
+            "clean light gray to white gradient, bright professional studio lighting, "
+            "home maintenance brand photography ad poster"
+        ),
+        "Interior Design": (
+        "a stunning luxury modular kitchen with marble countertops, gleaming pendant lights, "
+        "and sleek matte-white cabinets, empty beautiful space with no people, "
+        "warm cream to rich taupe gradient background, architectural photography, premium interior design ad"
+    ),
+    "Cleaning Services": (
+        "a spotlessly clean bright modern living room with gleaming hardwood floors, "
+        "a perfectly arranged white sofa and fresh flowers on a clean marble coffee table, "
+        "clean white to soft sky blue gradient background, premium home interior photography ad"
+    ),
+    "Plumbing": (
+        "a brand-new gleaming chrome bathroom fixture and a sleek modern sink basin on a clean marble counter, "
+        "clean light gray to white gradient, bright professional studio lighting, home maintenance ad"
+    ),
+    "Electrician": (
+        "a sleek modern smart home switch panel with glowing indicator lights mounted on a clean white wall, "
+        "dark charcoal to medium gray gradient background, professional studio lighting, electrical services ad"
+    ),
+    "_default": (
+        "a beautifully finished premium home space — clean, modern, and aspirational, "
+        "clean white to light gray gradient background, "
+        "bright professional architectural photography, home services brand ad"
+    ),
+    },
+
+    # ── Finance & Accounting ───────────────────────────────────────────────
+    "Finance & Accounting": {
+        "Tax Filing": (
+            "a sleek leather-bound document folder, a premium gold pen, and a crisp invoice sheet on a dark wooden desk, "
+            "deep navy blue to clean white gradient background, "
+            "premium professional studio lighting, finance brand photography ad poster"
+        ),
+        "GST Consulting": (
+            "a sharp modern calculator and a neatly stacked set of premium documents on a clean glass desk, "
+            "rich dark navy to soft silver-gray gradient background, "
+            "professional studio key lighting, GST consulting brand photography ad"
+        ),
+        "Accounting Services": (
+            "a sleek modern laptop showing a clean spreadsheet next to a premium ballpoint pen and notepad, "
+            "clean light gray to bright white gradient background, "
+            "professional corporate studio lighting, accounting brand photography ad poster"
+        ),
+        "Investment Advisory": (
+            "a premium golden bar chart trophy model resting next to a sleek document on a dark marble surface, "
+            "deep navy to rich gold gradient background, "
+            "warm dramatic studio lighting, investment advisory brand photography ad poster"
+        ),
+        "_default": (
+            "a premium calculator and a sleek leather portfolio resting on a clean dark wooden desk, "
+            "deep navy to clean white gradient background, "
+            "professional studio lighting, finance brand photography ad poster"
+        ),
+    },
+
+    # ── Legal Services ─────────────────────────────────────────────────────
+    "Legal Services": {
+        "Corporate Law": (
+            "a heavy premium hardcover law book and an elegant silver fountain pen on a dark mahogany desk, "
+            "deep dark charcoal to rich slate gray gradient background, "
+            "warm dramatic sidelight, premium corporate legal photography ad poster"
+        ),
+        "Property Registration": (
+            "a brass house key resting on a clean legal document with an elegant stamp, "
+            "warm golden amber to deep navy gradient background, "
+            "professional photography, property legal services ad poster"
+        ),
+        "Family Law": (
+            "a premium leather legal brief with a gold seal and an elegant pen on a clean desk, "
+            "warm white to light cream gradient background, "
+            "professional warm studio lighting, family law photography ad poster"
+        ),
+        "_default": (
+            "a premium law book and elegant fountain pen on a clean professional desk surface, "
+            "deep dark navy to rich slate gradient background, "
+            "warm dramatic studio lighting, legal services brand photography ad poster"
+        ),
+    },
+
+    # ── Retail & Shopping ──────────────────────────────────────────────────
+    "Retail & Shopping": {
+        "Fashion": (
+            "an elegant premium clothing tag and a sleek folded garment in a refined fabric on a clean surface, "
+            "soft warm cream to blush pink gradient background, "
+            "warm fashion studio lighting, premium retail fashion photography ad poster"
+        ),
+        "Electronics": (
+            "a sleek premium wireless earphone case and a gleaming smartphone resting on a dark matte surface, "
+            "deep charcoal to midnight navy gradient background, "
+            "premium tech product photography ad poster"
+        ),
+        "Gift Stores": (
+            "an elegant gift box tied with a premium silk ribbon on a clean marble surface, "
+            "warm soft gold to cream gradient background, "
+            "warm celebratory studio lighting, gift retail photography ad poster"
+        ),
+        "_default": (
+            "a premium product or stylized retail item resting beautifully on a clean display surface, "
+            "clean warm gradient from brand accent to white background, "
+            "soft studio lighting, premium retail photography ad poster"
+        ),
+    },
+
+    # ── Logistics & Transport ──────────────────────────────────────────────
+    "Logistics & Transport": {
+        "Courier Services": (
+            "a premium sealed cardboard parcel box with a printed shipping label on a clean warehouse floor, "
+            "clean white to light gray gradient background, "
+            "bright professional studio lighting, courier services photography ad poster"
+        ),
+        "Moving & Relocation": (
+            "a set of neatly stacked sealed moving boxes on a clean surface with a premium packing tape gun, "
+            "clean white to soft warm gray gradient background, "
+            "bright professional studio lighting, relocation services photography ad poster"
+        ),
+        "Fleet Management": (
+            "a sleek miniature truck model resting on a clean surface with a clipboard showing a route, "
+            "deep navy to slate gray gradient background, "
+            "cool corporate studio lighting, fleet services photography ad poster"
+        ),
+        "_default": (
+            "a premium sealed parcel or vehicle accessory resting on a clean professional surface, "
+            "clean white to light gray gradient background, "
+            "bright professional studio lighting, logistics brand photography ad poster"
+        ),
+    },
+
+    # ── Real Estate ────────────────────────────────────────────────────────
+    "Real Estate": {
+        "Property Sales": (
+            "a premium brass house key and a sleek modern floor plan blueprint on a clean glass table, "
+            "warm golden amber to soft white gradient background, "
+            "premium warm studio lighting, real estate photography ad poster"
+        ),
+        "Rentals": (
+            "a modern apartment key fob and a lease agreement document on a clean marble desk, "
+            "clean light gray to white gradient background, "
+            "bright professional studio lighting, property rental photography ad poster"
+        ),
+        "Commercial Real Estate": (
+            "a sleek architectural building model and a premium pen on a clean glass desk, "
+            "deep navy to soft slate gradient background, "
+            "premium corporate studio lighting, commercial real estate photography ad poster"
+        ),
+        "_default": (
+            "a premium property key and an elegant floor plan document on a clean desk surface, "
+            "warm golden to soft white gradient background, "
+            "professional studio lighting, real estate brand photography ad poster"
+        ),
+    },
+
+    # ── Manufacturing ──────────────────────────────────────────────────────
+    "Manufacturing": {
+        "_default": (
+            "a precision-engineered metal component or finished product resting on a clean industrial surface, "
+            "deep dark charcoal to slate gray gradient background, "
+            "professional industrial studio lighting, manufacturing brand photography ad poster"
+        ),
+    },
+
+    # ── Media & Advertising ────────────────────────────────────────────────
+    "Media & Advertising": {
+        "Digital Marketing": (
+            "a sleek premium smartphone showing a clean ad dashboard and a stylus resting next to it, "
+            "deep vibrant purple to clean white gradient background, "
+            "premium studio lighting, digital marketing photography ad poster"
+        ),
+        "Content Creation": (
+            "a premium mirrorless camera body resting next to a clean tripod on a minimal surface, "
+            "warm amber to soft cream gradient background, "
+            "warm golden studio lighting, content creation photography ad poster"
+        ),
+        "Graphic Design": (
+            "a premium Wacom stylus resting on a sleek drawing tablet next to refined color swatches, "
+            "clean soft lavender to white gradient background, "
+            "soft creative studio lighting, graphic design photography ad poster"
+        ),
+        "_default": (
+            "a premium camera or creative tool resting on a clean minimal surface, "
+            "deep vibrant purple to soft white gradient background, "
+            "professional studio lighting, media brand photography ad poster"
+        ),
+    },
+
     # ── Catch-all ────────────────────────────────────────────────────────
     "Other": {
         "_default": (
@@ -341,34 +545,72 @@ def _get_visual_archetype(category: str, sub_category: str | None) -> str:
     """
     Two-tier lookup: category → sub_category → archetype string.
     Falls back gracefully: sub_category match → category _default → Other _default.
+
+    The DB stores full category names (e.g. "IT & Technology Services") which match
+    CATEGORY_LIST exactly — we now use those same strings as dict keys.
     """
-    cat_map = SUB_CATEGORY_VISUAL_ARCHETYPES.get(category) or SUB_CATEGORY_VISUAL_ARCHETYPES.get("Other", {})
+    cat_map = SUB_CATEGORY_VISUAL_ARCHETYPES.get(category)
+    if cat_map is None:
+        # Graceful fallback: try stripping common suffixes so legacy data still resolves
+        for key in SUB_CATEGORY_VISUAL_ARCHETYPES:
+            if key.lower().startswith(category.lower().split("&")[0].strip().lower()):
+                cat_map = SUB_CATEGORY_VISUAL_ARCHETYPES[key]
+                break
+    if cat_map is None:
+        cat_map = SUB_CATEGORY_VISUAL_ARCHETYPES.get("Other", {})
+
     if sub_category:
         archetype = cat_map.get(sub_category)
         if archetype:
             return archetype
+        # Try partial sub-category match (e.g. "Salons" matches "Salon")
+        sub_lower = sub_category.lower()
+        for key, val in cat_map.items():
+            if key != "_default" and (key.lower() in sub_lower or sub_lower in key.lower()):
+                return val
+
     return cat_map.get("_default") or SUB_CATEGORY_VISUAL_ARCHETYPES["Other"]["_default"]
+
+
+def _normalize_category_for_guard(category: str = "", sub_category: str = "") -> str:
+    """Return a combined lowercase string for _category_visual_guard matching."""
+    return f"{category or ''} {sub_category or ''}".lower()
 
 
 def _category_visual_guard(category: str = None, sub_category: str = None, campaign_title: str = None) -> str:
     """
     Short positive guardrails for known categories to enforce photorealistic object visuals.
+    Returns a short style-enforcement suffix appended to the FLUX prompt.
     """
     text = f"{category or ''} {sub_category or ''} {campaign_title or ''}".lower()
-    if "education" in text or "neet" in text or "jee" in text:
+    if "education" in text or "neet" in text or "jee" in text or "coaching" in text:
         return (
             "premium commercial photography, neat stack of modern books on a desk, "
             "clean academy poster style, highly realistic but uncluttered, NO human face, NO people"
         )
-    if "beauty" in text or "salon" in text:
+    if "beauty" in text or "salon" in text or "personal care" in text or "spa" in text:
         return "premium beauty product photography, stylized elegant bottles or tools on marble, NO human face, NO people"
-    if "food" in text or "restaurant" in text:
-        return "premium food photography, appetizing dish, clean lighting, NO human hands, NO people"
-    if "health" in text or "fitness" in text:
-        return "premium commercial health photography, sleek fitness equipment, clean studio floor, NO humans, NO people"
-    if "technology" in text or "software" in text or "it " in f"{text} ":
-        return "premium commercial tech photography, sleek modern device on a desk, clean interface depth, NO humans, NO people"
-    return "premium commercial product photography, minimalist setup, NO humans, NO people"
+    if "food" in text or "restaurant" in text or "bakery" in text or "cafe" in text or "catering" in text:
+        return "premium food photography, appetizing dish or ingredient, clean warm lighting, NO human hands, NO people"
+    if "health" in text or "fitness" in text or "wellness" in text or "gym" in text or "yoga" in text:
+        return "premium commercial health photography, sleek fitness equipment or wellness prop, clean studio, NO humans, NO people"
+    if "technology" in text or "software" in text or "it " in f"{text} " or "tech" in text or "app" in text:
+        return "premium commercial tech photography, sleek modern device on a desk, clean interface, NO humans, NO people"
+    if "finance" in text or "accounting" in text or "tax" in text or "gst" in text or "investment" in text:
+        return "premium finance photography, elegant documents and pen on a clean desk, professional corporate style, NO humans, NO people"
+    if "legal" in text or "law" in text:
+        return "premium legal services photography, leather document folder and fountain pen on mahogany desk, NO humans, NO people"
+    if "real estate" in text or "property" in text:
+        return "premium real estate photography, brass key and floor plan on clean desk, NO humans, NO people"
+    if "home" in text or "cleaning" in text or "plumbing" in text or "interior" in text:
+        return "premium home services photography, professional tool or cleaning product on clean surface, NO humans, NO people"
+    if "retail" in text or "shopping" in text or "fashion" in text:
+        return "premium retail product photography, elegant product on clean display surface, NO humans, NO people"
+    if "media" in text or "marketing" in text or "advertising" in text or "design" in text:
+        return "premium creative industry photography, sleek camera or design tool on minimal surface, NO humans, NO people"
+    if "logistics" in text or "transport" in text or "delivery" in text or "courier" in text:
+        return "premium logistics photography, clean parcel or professional transport prop on clean surface, NO humans, NO people"
+    return "premium commercial product photography, minimalist setup, clean studio, NO humans, NO people"
 
 
 # ---------------------------------------------------------------------------
@@ -405,15 +647,10 @@ def _call_gemini(
     if not api_key:
         raise ValueError("GEMINI_API_KEY is not configured")
 
-    # Priority order — 2.5-pro is the pro model, but it often hits 429 rate limits.
-    # 3.6-flash and flash-latest are highly reliable (return 200).
+    # Priority: gemini-3.6-flash is the active free-tier model for new keys.
     models_to_try = [
-        "gemini-2.5-pro",
-        "gemini-3.1-pro-preview",
         "gemini-3.6-flash",
         "gemini-flash-latest",
-        "gemini-2.0-flash",
-        "gemini-2.0-flash-lite",
         "gemini-flash-lite-latest",
     ]
 
@@ -1246,18 +1483,28 @@ def compose_campaign_ad_thumbnail(
     # ── 3. Cinematic gradient overlay — transparent top → dark bottom ───────
     gradient = Image.new("RGBA", (IMAGE_WIDTH, IMAGE_HEIGHT), (0, 0, 0, 0))
     grad_draw = ImageDraw.Draw(gradient)
-    GRAD_START_Y = 410      # gradient begins here (transparent)
-    GRAD_OPAQUE_Y = 680     # fully opaque by this point
+    GRAD_START_Y = 350      # gradient begins here (transparent) — earlier start = more text-safe zone
+    GRAD_OPAQUE_Y = 580     # fully opaque by this point — ensures hook text is always on dark bg
     for gy in range(IMAGE_HEIGHT):
         if gy < GRAD_START_Y:
             continue
         t = min(1.0, (gy - GRAD_START_Y) / (GRAD_OPAQUE_Y - GRAD_START_Y))
         # Ease-in-out for a smooth, cinematic look
         t = t * t * (3 - 2 * t)
-        alpha = int(t * 230)
+        alpha = int(t * 245)  # raised from 230 — stronger opacity for text contrast
         grad_draw.line([(0, gy), (IMAGE_WIDTH, gy)], fill=(dark[0], dark[1], dark[2], alpha))
 
     canvas = Image.alpha_composite(canvas, gradient)
+
+    # ── 3b. Text scrim safety layer — solid dark block behind text zone (invisible but ensures readability) ──
+    # This guarantees hook text is readable even if the base image is bright at y=520
+    scrim = Image.new("RGBA", (IMAGE_WIDTH, IMAGE_HEIGHT), (0, 0, 0, 0))
+    scrim_draw = ImageDraw.Draw(scrim)
+    scrim_draw.rectangle(
+        [(0, 500), (IMAGE_WIDTH, IMAGE_HEIGHT)],
+        fill=(dark[0], dark[1], dark[2], 100)  # soft additional scrim — adds ~40% more contrast
+    )
+    canvas = Image.alpha_composite(canvas, scrim)
 
     # ── 4. Accent stripe — thin coloured bar above the text zone ───────────
     stripe_layer = Image.new("RGBA", (IMAGE_WIDTH, IMAGE_HEIGHT), (0, 0, 0, 0))
@@ -1504,81 +1751,160 @@ def build_ideogram_prompt(
     return full
 
 
-def generate_image_with_gemini(
+def build_cloudflare_prompt(
+    ai_image_prompt: str,
+    category: str = None,
+    sub_category: str = None,
+    ad_creative_design: dict = None,
+    visual_story: dict = None,
+    campaign_title: str = None,
+    offer_text: str = None,
+) -> str:
+    """
+    Build a FLUX-optimized prompt for Cloudflare Workers AI.
+
+    Core strategy (max 80 words):
+      1. GEMINI'S SCENE FIRST — it has the seller-specific aspirational context.
+         The Gemini prompt already describes a specific, relevant visual.
+         Strip its structural labels and use the pure descriptive content.
+      2. Background gradient from ad_creative_design — critical for visual identity.
+      3. Archetype style tag (last phrase only) — just the style descriptor, not the object list.
+      4. Strong ad-creative FLUX anchors — aspirational, no tools, no props.
+    """
+    # ── Step 1: Extract the clean scene from Gemini's prompt ─────────────────────
+    raw = ai_image_prompt.strip()
+    # Strip structural labels (CONCEPT:, SUBJECT:, BACKGROUND:, etc.)
+    raw = re.sub(r'(?:CONCEPT|SUBJECT|BACKGROUND|COMPOSITION|STYLE|SCENE|LIGHTING|MOOD|VISUAL STORY|KEY PROP|SETTING)\s*:\s*', '', raw, flags=re.IGNORECASE)
+    raw = re.sub(r'PREMIUM ADVERTISEMENT for [^:]+:\s*', '', raw, flags=re.IGNORECASE)
+    raw = re.sub(r'\[.*?\]', '', raw)  # remove [LABEL] brackets
+    raw = re.sub(r'\s+', ' ', raw).strip().rstrip('.')
+
+    # Extract only the first strong sentence (before '. ') — most scene-specific
+    sentences = re.split(r'(?<=[.!?])\s+', raw)
+    core_scene = sentences[0].strip() if sentences else raw
+
+    # ── Step 2: Build the aspirational FLUX prompt ──────────────────────────
+    parts = []
+
+    # Use the Gemini scene as primary visual description if it's meaningful
+    if len(core_scene.split()) >= 8:
+        parts.append(core_scene)
+    else:
+        # Gemini gave nothing useful — fall back to archetype SCENE description
+        archetype = _get_visual_archetype(category or "Other", sub_category)
+        archetype_phrases = [p.strip() for p in archetype.split(",") if p.strip()]
+        scene_desc = ", ".join(archetype_phrases[:5])  # first 5 phrases = the visual scene
+        parts.append(scene_desc)
+
+    # ── Step 3: Background gradient ───────────────────────────────────────
+    if ad_creative_design:
+        bg = (ad_creative_design.get("background_gradient") or "").strip()
+        if bg:
+            parts.append(f"background: {bg}")
+
+    # ── Step 4: Ad quality anchors ────────────────────────────────────────
+    parts.append(
+        "aspirational lifestyle ad photography, beautiful composition, "
+        "lower third clear and dark for text, no people, no text, no watermark, sharp focus"
+    )
+
+    full_prompt = ", ".join(p.rstrip(", ") for p in parts if p)
+
+    # ── Step 5: Hard cap at 80 words ──────────────────────────────────────
+    words = full_prompt.split()
+    if len(words) > 80:
+        tail = "background: aspirational lifestyle ad photography, lower third clear and dark for text, no people, no text, sharp focus"
+        tail_words = tail.split()
+        head = " ".join(words[:80 - len(tail_words)])
+        full_prompt = f"{head}, {tail}"
+
+    return full_prompt
+
+
+def generate_image_with_cloudflare(
     prompt: str,
     save_dir: str = "uploads/ai-thumbnails",
 ) -> str | None:
     """
-    Generate an ad image using Gemini's native image generation models.
+    Generate an ad image using Cloudflare Workers AI.
 
-    With a Pro API key, models like gemini-2.5-flash-image and gemini-3.1-flash-image
-    can output images directly via the generateContent API.
-    Returns the local file path on success, or None if generation fails (caller should fall back).
+    Tries two Cloudflare models in priority order:
+      1. @cf/stabilityai/stable-diffusion-xl-base-1.0 — SDXL, best commercial ad quality.
+         Better lighting, composition, and scene understanding than FLUX.1-schnell.
+      2. @cf/black-forest-labs/flux-1-schnell — Fast fallback if SDXL is unavailable.
 
-    Why this is better than Pollinations/Ideogram for ad creatives:
-      - Understands our detailed prompt with brand context, gradients, and composition
-      - Much higher photorealism and commercial style awareness
-      - No external API tokens needed (uses same Gemini key)
-      - Consistent quality tied to our carefully crafted prompts
+    Returns the local file path on success, or None if all Cloudflare models fail.
     """
-    api_key = settings.GEMINI_API_KEY
-    if not api_key:
+    account_id = settings.CF_ACCOUNT_ID
+    api_token = settings.CF_API_TOKEN
+    if not account_id or not api_token:
+        print("[INFO] Cloudflare Workers AI not configured (CF_ACCOUNT_ID/CF_API_TOKEN missing). Skipping.")
         return None
 
-    # Image-capable Gemini models (priority order — all confirmed available for this API key)
-    image_models = [
-        "gemini-2.5-flash-image",
-        "gemini-3.1-flash-image",
-        "gemini-3.1-flash-image-preview",
-        "gemini-3.1-flash-lite-image",
-        "gemini-3-pro-image",
-        "gemini-3-pro-image-preview",
+    os.makedirs(save_dir, exist_ok=True)
+    headers = {"Authorization": f"Bearer {api_token}"}
+
+    # Priority: SDXL first (best quality), FLUX.1-schnell as fallback
+    cf_models = [
+        {
+            "id": "@cf/stabilityai/stable-diffusion-xl-base-1.0",
+            "payload": {"prompt": prompt, "num_steps": 12},
+        },
+        {
+            "id": "@cf/black-forest-labs/flux-1-schnell",
+            "payload": {"prompt": prompt, "steps": 8},
+        },
     ]
 
-    os.makedirs(save_dir, exist_ok=True)
-    filename = f"{uuid.uuid4().hex}.png"
-    filepath = os.path.join(save_dir, filename)
+    for model_info in cf_models:
+        model_id = model_info["id"]
+        payload = model_info["payload"]
+        filename = f"cf_{uuid.uuid4().hex[:12]}.png"
+        filepath = os.path.join(save_dir, filename)
 
-    payload = {
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "responseModalities": ["IMAGE", "TEXT"],
-            "temperature": 0.8,
-        },
-    }
+        url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{model_id}"
+        print(f"[INFO] Calling Cloudflare Workers AI ({model_id.split('/')[-1]}) | prompt_len={len(prompt.split())} words")
+        print(f"[INFO] Cloudflare prompt preview: {prompt[:180]}...")
 
-    for model in image_models:
-        url = (
-            "https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{model}:generateContent?key={api_key}"
-        )
         try:
-            response = requests.post(url, json=payload, timeout=180)
-            if response.status_code != 200:
-                print(f"[WARN] Gemini image model {model} returned {response.status_code}. Trying next...")
-                continue
-
-            data = response.json()
-            candidates = data.get("candidates", [])
-            if not candidates:
-                continue
-
-            parts = candidates[0].get("content", {}).get("parts", [])
-            for part in parts:
-                inline = part.get("inlineData", {})
-                if inline.get("mimeType", "").startswith("image/"):
-                    import base64
-                    img_bytes = base64.b64decode(inline["data"])
-                    with open(filepath, "wb") as f:
-                        f.write(img_bytes)
-                    print(f"[INFO] Gemini image saved via {model}: {filepath} ({len(img_bytes) // 1024} KB)")
-                    return filepath
-
-        except Exception as e:
-            print(f"[WARN] Gemini image model {model} failed: {e}")
+            response = requests.post(url, headers=headers, json=payload, timeout=120)
+        except requests.exceptions.Timeout:
+            print(f"[WARN] Cloudflare {model_id} timed out after 120s. Trying next...")
+            continue
+        except requests.exceptions.RequestException as e:
+            print(f"[WARN] Cloudflare {model_id} request failed: {e}. Trying next...")
             continue
 
-    print("[WARN] All Gemini image models failed — will fall back to Ideogram/Pollinations.")
+        if response.status_code != 200:
+            print(f"[WARN] Cloudflare {model_id} returned {response.status_code}: {response.text[:300]}")
+            continue
+
+        # Try raw image bytes first (preferred)
+        content_type = response.headers.get("content-type", "")
+        if "image" in content_type:
+            with open(filepath, "wb") as f:
+                f.write(response.content)
+            print(f"[INFO] Cloudflare image ({model_id.split('/')[-1]}) saved: {filepath} ({len(response.content) // 1024} KB)")
+            return filepath
+
+        # Then try JSON with base64
+        try:
+            resp_json = response.json()
+            result = resp_json.get("result", {})
+            img_b64 = result.get("image") if isinstance(result, dict) else None
+            if img_b64:
+                import base64
+                img_bytes = base64.b64decode(img_b64)
+                with open(filepath, "wb") as f:
+                    f.write(img_bytes)
+                print(f"[INFO] Cloudflare image (base64, {model_id.split('/')[-1]}) saved: {filepath} ({len(img_bytes) // 1024} KB)")
+                return filepath
+        except Exception:
+            pass
+
+        print(f"[WARN] Cloudflare {model_id}: unexpected response format (Content-Type: {content_type})")
+
+    print("[WARN] All Cloudflare models failed.")
     return None
 
 
@@ -1586,43 +1912,37 @@ def generate_campaign_image(
     full_prompt: str,
     negative_prompt: str = None,
     save_dir: str = "uploads/ai-thumbnails",
+    cloudflare_prompt: str = None,
 ) -> str:
     """
     Generate a premium advertising-quality 4:3 image.
 
     Generation priority (highest quality first):
-      1. Gemini native image generation (gemini-2.5-flash-image / gemini-3.1-flash-image)
-         — Best quality, uses same Pro API key, understands our full prompt context.
-      2. Ideogram v2 API — photorealistic ad-style images with accurate gradients.
-      3. Pollinations AI (Flux) — free fallback, lower quality but always available.
+      1. Cloudflare Workers AI (FLUX.1-schnell)
+         — Primary. Free 10K neurons/day, fast, photorealistic.
+         — Uses cloudflare_prompt (80-word FLUX-tuned) if provided, else full_prompt.
+      2. Ideogram v2 API
+         — Secondary. Best text rendering. Uses full_prompt (ideogram-native format).
+      3. Pollinations AI (FLUX)
+         — Free fallback. Always available. Uses full_prompt.
 
     Returns the local file path to the saved generated image.
     """
-    # ── Attempt 1: Gemini native image generation ─────────────────────────────
-    print("[INFO] Attempting Gemini native image generation...")
-    gemini_path = generate_image_with_gemini(full_prompt, save_dir=save_dir)
-    if gemini_path:
-        return gemini_path
+    # ── Attempt 1: Cloudflare Workers AI (FLUX.1-schnell) ───────────────────────
+    cf_prompt_to_use = cloudflare_prompt or full_prompt
+    cf_path = generate_image_with_cloudflare(cf_prompt_to_use, save_dir=save_dir)
+    if cf_path:
+        return cf_path
 
-    # ── Attempt 2: Ideogram v2 ────────────────────────────────────────────────
+    # ── Attempt 2: Ideogram v2 ─────────────────────────────────────────────
     api_key = settings.IDEOGRAM_API_KEY
-
-    # Quick pre-check: skip Ideogram if key is missing
-    _ideogram_skip = not api_key
-
-    if not _ideogram_skip:
+    if api_key:
         os.makedirs(save_dir, exist_ok=True)
         filename = f"{uuid.uuid4().hex}.png"
         filepath = os.path.join(save_dir, filename)
-
         neg = negative_prompt or FLUX_NEGATIVE_PROMPT
-
         url = "https://api.ideogram.ai/generate"
-        headers = {
-            "Api-Key": api_key,
-            "Content-Type": "application/json",
-        }
-
+        headers = {"Api-Key": api_key, "Content-Type": "application/json"}
         payload = {
             "image_request": {
                 "prompt": full_prompt,
@@ -1634,56 +1954,40 @@ def generate_campaign_image(
                 "num_images": 1,
             }
         }
-
-        print(f"[INFO] Calling Ideogram v2 | prompt_len={len(full_prompt)} chars  ")
-        print(f"[INFO] Ideogram prompt preview: {full_prompt[:200]}...")
-
-        response = requests.post(url, json=payload, headers=headers, timeout=180)
-
-        if response.status_code != 200:
-            error_text = response.text[:400]
-            if response.status_code in (401, 402, 403):
-                # Silently skip to Pollinations if key is invalid (no need to spam warnings on every retry)
-                _ideogram_skip = True  # fall through to Pollinations below
+        print(f"[INFO] Calling Ideogram v2 | prompt_len={len(full_prompt)} chars")
+        try:
+            response = requests.post(url, json=payload, headers=headers, timeout=180)
+            if response.status_code == 200:
+                resp_data = response.json()
+                images = resp_data.get("data", [])
+                if images and images[0].get("url"):
+                    img_url = images[0]["url"]
+                    img_response = requests.get(img_url, timeout=120)
+                    img_response.raise_for_status()
+                    with open(filepath, "wb") as f:
+                        f.write(img_response.content)
+                    print(f"[INFO] Ideogram image saved: {filepath}")
+                    return filepath
+            elif response.status_code in (401, 402, 403):
+                print(f"[WARN] Ideogram API auth/billing error {response.status_code} — skipping to Pollinations")
             else:
-                raise ValueError(f"Ideogram API error {response.status_code}: {error_text}")
-        else:
-            resp_data = response.json()
-            images = resp_data.get("data", [])
-            if not images:
-                raise ValueError(f"Ideogram returned no images. Response: {resp_data}")
+                print(f"[WARN] Ideogram API error {response.status_code}: {response.text[:200]}")
+        except Exception as e:
+            print(f"[WARN] Ideogram generation failed: {e}")
 
-            image_url = images[0].get("url")
-            if not image_url:
-                raise ValueError(f"Ideogram image URL missing in response: {images[0]}")
-
-            os.makedirs(save_dir, exist_ok=True)
-            filename = f"{uuid.uuid4().hex}.png"
-            filepath = os.path.join(save_dir, filename)
-            img_response = requests.get(image_url, timeout=120)
-            img_response.raise_for_status()
-            with open(filepath, "wb") as f:
-                f.write(img_response.content)
-            return filepath
-
-    if not api_key:
-        raise ValueError("IDEOGRAM_API_KEY is not configured in .env")
-
-    # ── Attempt 3: Pollinations AI (free Flux fallback) ───────────────────────
-    print("[INFO] Falling back to Pollinations AI (Flux) for image generation...")
-    import urllib.parse
+    # ── Attempt 3: Pollinations AI (free FLUX fallback) ──────────────────────
+    print("[INFO] Falling back to Pollinations AI (FLUX) for image generation...")
     os.makedirs(save_dir, exist_ok=True)
     filename = f"{uuid.uuid4().hex}.png"
     filepath = os.path.join(save_dir, filename)
-    encoded_prompt = urllib.parse.quote(full_prompt)
-    fallback_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1344&height=1008&nologo=true"
+    # Use cf_prompt_to_use (80-word FLUX-tuned) for Pollinations too
+    encoded_prompt = urllib.parse.quote(cf_prompt_to_use)
+    fallback_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1344&height=1008&model=flux-pro&nologo=true"
     img_response = requests.get(fallback_url, timeout=120)
     img_response.raise_for_status()
     with open(filepath, "wb") as f:
         f.write(img_response.content)
     print(f"[INFO] Pollinations image saved: {filepath} ({len(img_response.content) // 1024} KB)")
-    return filepath
-
 
 
 # ---------------------------------------------------------------------------
