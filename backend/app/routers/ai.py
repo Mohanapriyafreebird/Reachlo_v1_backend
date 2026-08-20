@@ -41,6 +41,7 @@ from app.utils.ai_generation import (
     analyze_business,
     generate_full_campaign,
     build_flux_prompt,
+    build_cloudflare_prompt,
     build_ideogram_prompt,
     run_hallucination_guard,
     generate_campaign_image,
@@ -299,14 +300,30 @@ def generate_ai_campaign(
     )
     print(f"[INFO] Ideogram prompt ({len(ideogram_prompt)} chars): {ideogram_prompt[:200]}...")
 
+    # Cloudflare FLUX-optimized prompt (80-word cap, scene-description-first, context-matched)
+    cloudflare_prompt = build_cloudflare_prompt(
+        ai_image_prompt,
+        category=business.category,
+        sub_category=business.sub_category,
+        ad_creative_design=ad_creative_design,
+        visual_story=visual_story,
+        campaign_title=campaign_content.get("title", ""),
+        offer_text=campaign_content.get("offer", ""),
+    )
+    print(f"[INFO] Cloudflare prompt ({len(cloudflare_prompt.split())} words): {cloudflare_prompt[:200]}...")
+
     image_url = None
 
     if image_url is None:
-        max_attempts = 3
+        max_attempts = 2
         for attempt in range(max_attempts):
             try:
-                # Use ideogram_prompt for generation — Ideogram v2 model
-                filepath = generate_campaign_image(ideogram_prompt, negative_prompt=FLUX_NEGATIVE_PROMPT)
+                # Use ideogram_prompt for Ideogram; cloudflare_prompt for Cloudflare/FLUX
+                filepath = generate_campaign_image(
+                    ideogram_prompt,
+                    negative_prompt=FLUX_NEGATIVE_PROMPT,
+                    cloudflare_prompt=cloudflare_prompt,
+                )
                 image_url = _image_url_from_path(filepath)
                 
                 # Run Quality Reviewer
@@ -314,7 +331,7 @@ def generate_ai_campaign(
                 review = review_campaign_image(filepath, business.name, business.category, title)
                 score = review.get("score", 100)
                 
-                if score >= 82 or attempt == max_attempts - 1:
+                if score >= 70 or attempt == max_attempts - 1:
                     try:
                         filepath = compose_campaign_ad_thumbnail(
                             filepath,
@@ -583,7 +600,29 @@ def regenerate_draft_image(
                 poster_copy = {}
                 ad_creative_design = {}
 
-        filepath = generate_campaign_image(draft.image_prompt)
+        # Rebuild Cloudflare prompt for regeneration using stored pipeline data
+        regen_cloudflare_prompt = None
+        if draft.ai_pipeline_stages:
+            try:
+                regen_stages = json.loads(draft.ai_pipeline_stages)
+                regen_cf_ad_design = regen_stages.get("ad_creative_design", {})
+                regen_cf_visual = regen_stages.get("visual_story", {})
+                regen_cloudflare_prompt = build_cloudflare_prompt(
+                    draft.image_prompt,
+                    category=business.category,
+                    sub_category=business.sub_category,
+                    ad_creative_design=regen_cf_ad_design,
+                    visual_story=regen_cf_visual,
+                    campaign_title=draft.title or "",
+                    offer_text=draft.offer or "",
+                )
+            except Exception:
+                regen_cloudflare_prompt = None
+
+        filepath = generate_campaign_image(
+            draft.image_prompt,
+            cloudflare_prompt=regen_cloudflare_prompt,
+        )
         try:
             filepath = compose_campaign_ad_thumbnail(
                 filepath,
