@@ -26,6 +26,7 @@ import {
   ActivityIndicator,
   Animated,
   FlatList,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -50,6 +51,14 @@ const LOADING_STATUSES = [
   'Writing persuasive campaign copy...',
   'Generating premium ad thumbnail...',
 ];
+
+const loadingAnimations = {
+  'Analyzing your business profile...': require('../../../assets/loading_statuses/Analyzing your business profile.png'),
+  'Building creative strategy...': require('../../../assets/loading_statuses/Building creative strategy.png'),
+  'Composing advertising direction...': require('../../../assets/loading_statuses/Composing advertising direction.png'),
+  'Writing persuasive campaign copy...': require('../../../assets/loading_statuses/Writing persuasive campaign copy.png'),
+  'Generating premium ad thumbnail...': require('../../../assets/loading_statuses/Generating premium ad thumbnail.png'),
+};
 
 export default function AICampaignGenerateScreen({ navigation }) {
   const [campaignTopic, setCampaignTopic] = useState('');
@@ -283,10 +292,9 @@ export default function AICampaignGenerateScreen({ navigation }) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
         <LinearGradient colors={['#F0F9FF', '#E0F2FE']} style={styles.loadingGradient}>
-          <ActivityIndicator
-            size="large"
-            color="#1A73E8"
-            style={{ transform: [{ scale: 1.5 }], marginBottom: 32 }}
+          <Animated.Image
+            source={loadingAnimations[LOADING_STATUSES[loadingStatusIndex]]}
+            style={{ width: 180, height: 180, marginBottom: 24, opacity: fadeAnim, resizeMode: 'contain' }}
           />
           <Animated.Text style={[styles.loadingStatusText, { opacity: fadeAnim }]}>
             {LOADING_STATUSES[loadingStatusIndex]}
