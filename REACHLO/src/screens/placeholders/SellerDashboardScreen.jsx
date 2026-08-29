@@ -14,6 +14,7 @@ import {
   Image,
   Linking,
   PanResponder,
+  FlatList,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
@@ -269,6 +270,245 @@ const ALL_INDIA_CITIES = [
   'Warangal','Rajkot','Tiruchirapalli','Hubli-Dharwad','Bhiwandi','Saharanpur','Gorakhpur','Guntur'
 ].sort();
 
+export const getLeadStatus = (lead) => {
+  if (lead.status === 'CLOSED') return 'CLOSED';
+
+  const thread = lead.thread;
+  if (!thread || !thread.last_seller_reply_at) {
+    return 'NEW';
+  }
+
+  const now = new Date().getTime();
+  const buyerTime = thread.last_buyer_message_at ? new Date(thread.last_buyer_message_at).getTime() : 0;
+  const sellerTime = thread.last_seller_reply_at ? new Date(thread.last_seller_reply_at).getTime() : 0;
+  
+  const latestActivity = Math.max(buyerTime, sellerTime);
+  const inactiveHours = (now - latestActivity) / (1000 * 60 * 60);
+  
+  let sellerMissedResponse = false;
+  if (buyerTime > sellerTime) {
+    const hoursSinceBuyerMsg = (now - buyerTime) / (1000 * 60 * 60);
+    if (hoursSinceBuyerMsg > 36) {
+      sellerMissedResponse = true;
+    }
+  }
+
+  if (inactiveHours > 24 || sellerMissedResponse) {
+    return 'CONTACTED';
+  }
+
+  return 'ACTIVE';
+};
+
+const formatLeadDate = (dateString) => {
+  if (!dateString) return '';
+  const d = new Date(dateString);
+  const day = d.getDate();
+  const month = d.toLocaleString('default', { month: 'short' });
+  return `📅 ${day} ${month}`;
+};
+
+function CRMLeadCard({ lead, onCall, onWhatsApp }) {
+  const initials = getLeadInitials(lead.name);
+  const calculatedStatus = getLeadStatus(lead);
+  
+  const getAccentColor = (status) => {
+    switch (status) {
+      case 'NEW': return '#3B82F6';
+      case 'ACTIVE': return '#14B8A6'; // Teal
+      case 'CONTACTED': return '#8B5CF6'; // Indigo/Violet
+      case 'CLOSED': return '#94A3B8';
+      default: return '#3B82F6';
+    }
+  };
+
+  const getAvatarGradient = (status) => {
+    switch (status) {
+      case 'NEW': return ['#60A5FA', '#4F46E5'];
+      case 'ACTIVE': return ['#34D399', '#059669']; // Green/Teal
+      case 'CONTACTED': return ['#A78BFA', '#6366F1'];
+      case 'CLOSED': return ['#94A3B8', '#64748B'];
+      default: return ['#60A5FA', '#4F46E5'];
+    }
+  };
+
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case 'NEW': return { bg: 'rgba(59, 130, 246, 0.12)', text: '#3B82F6' };
+      case 'ACTIVE': return { bg: 'rgba(20, 184, 166, 0.12)', text: '#14B8A6' };
+      case 'CONTACTED': return { bg: 'rgba(139, 92, 246, 0.12)', text: '#8B5CF6' };
+      case 'CLOSED': return { bg: 'rgba(148, 163, 184, 0.12)', text: '#64748B' };
+      default: return { bg: 'rgba(148, 163, 184, 0.12)', text: '#64748B' };
+    }
+  };
+  
+  const accentColor = getAccentColor(calculatedStatus);
+  const avatarColors = getAvatarGradient(calculatedStatus);
+  const badgeColors = getStatusBadge(calculatedStatus);
+
+  return (
+    <View style={[styles.crmCard, { borderLeftColor: accentColor }]}>
+      <View style={styles.crmCardHeader}>
+        <View style={styles.crmCardLeft}>
+          <LinearGradient colors={avatarColors} style={styles.crmAvatar}>
+            <Text style={styles.crmAvatarText}>{initials}</Text>
+          </LinearGradient>
+          <View>
+            <Text style={styles.crmBuyerName}>{lead.name}</Text>
+            <View style={styles.crmPhoneRow}>
+              <Ionicons name="call-outline" size={12} color="#94A3B8" />
+              <Text style={styles.crmBuyerPhone}>{lead.phone}</Text>
+            </View>
+          </View>
+        </View>
+        <View style={[styles.crmBadge, { backgroundColor: badgeColors.bg }]}>
+          <Text style={[styles.crmBadgeText, { color: badgeColors.text }]}>{calculatedStatus}</Text>
+        </View>
+      </View>
+      
+      <View style={styles.crmCardDivider} />
+      
+      <View style={styles.crmCardFooter}>
+        <View style={styles.crmDateRow}>
+          <Text style={[styles.crmDate, { color: '#475569' }]}>{formatLeadDate(lead.createdAt)}</Text>
+        </View>
+        <View style={styles.crmActions}>
+          <Pressable style={[styles.crmActionBtn, { borderColor: accentColor + '60' }]} onPress={onCall}>
+            <Ionicons name="call-outline" size={14} color={accentColor} />
+            <Text style={[styles.crmActionText, { color: accentColor }]}>Call</Text>
+          </Pressable>
+          <Pressable style={[styles.crmActionBtn, { borderColor: accentColor + '60' }]} onPress={onWhatsApp}>
+            <Ionicons name="chatbubble-ellipses-outline" size={14} color={accentColor} />
+            <Text style={[styles.crmActionText, { color: accentColor }]}>Chat</Text>
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function CRMLeadsModal({ visible, onClose, campaign, dismissedLeadIds, onCall, onWhatsApp, markAllRead }) {
+  const [filter, setFilter] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchActive, setIsSearchActive] = useState(false);
+  
+  if (!campaign) return null;
+  
+  const leads = campaign.leads || [];
+  const filters = ['All', 'New', 'Active', 'Contacted', 'Closed'];
+  
+  const filteredLeads = leads.filter(lead => {
+    if (dismissedLeadIds && dismissedLeadIds.includes(lead.id)) return false;
+    
+    // Status Filter
+    const calcStatus = getLeadStatus(lead);
+    if (filter !== 'All') {
+      if (filter === 'New' && calcStatus !== 'NEW') return false;
+      if (filter === 'Active' && calcStatus !== 'ACTIVE') return false;
+      if (filter === 'Contacted' && calcStatus !== 'CONTACTED') return false;
+      if (filter === 'Closed' && calcStatus !== 'CLOSED') return false;
+    }
+    
+    // Search Filter
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const n = (lead.name || '').toLowerCase();
+      const p = (lead.phone || '').toLowerCase();
+      const c = (lead.campaignTitle || campaign.title || '').toLowerCase();
+      if (!n.includes(q) && !p.includes(q) && !c.includes(q)) return false;
+    }
+    
+    return true;
+  });
+
+  return (
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <LinearGradient colors={['#FFFFFF', '#F1F5F9', '#E2E8F0']} style={styles.crmContainer}>
+        <SafeAreaView style={{ flex: 1 }}>
+          {/* Header */}
+          <View style={styles.crmHeader}>
+            <Pressable onPress={onClose} style={styles.crmBackBtn} hitSlop={12}>
+              <Ionicons name="arrow-back" size={24} color="#0F172A" />
+            </Pressable>
+            {isSearchActive ? (
+              <View style={[styles.crmHeaderTitles, { flexDirection: 'row', alignItems: 'center' }]}>
+                <TextInput
+                  style={{ flex: 1, fontSize: 16, color: '#0F172A', paddingVertical: 4, paddingHorizontal: 8, backgroundColor: '#F1F5F9', borderRadius: 8, marginRight: 8 }}
+                  placeholder="Search leads..."
+                  placeholderTextColor="#94A3B8"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  autoFocus
+                />
+                <Pressable onPress={() => { setIsSearchActive(false); setSearchQuery(''); }} hitSlop={12}>
+                  <Ionicons name="close" size={22} color="#64748B" />
+                </Pressable>
+              </View>
+            ) : (
+              <>
+                <View style={styles.crmHeaderTitles}>
+                  <Text style={styles.crmHeaderTitle}>View Leads</Text>
+                  <Text style={styles.crmHeaderSubtitle} numberOfLines={1}>{campaign.title}</Text>
+                </View>
+                <Pressable style={styles.crmSearchBtn} hitSlop={12} onPress={() => setIsSearchActive(true)}>
+                  <Ionicons name="search" size={22} color="#0F172A" />
+                </Pressable>
+              </>
+            )}
+          </View>
+
+          {/* Filter Chips */}
+          <View style={styles.crmFilterWrapper}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.crmFilterContainer}>
+              {filters.map(f => (
+                <Pressable 
+                  key={f} 
+                  style={[styles.crmFilterChip, filter === f && styles.crmFilterChipActive]}
+                  onPress={() => setFilter(f)}
+                >
+                  <Text style={[styles.crmFilterText, filter === f && styles.crmFilterTextActive]}>{f}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+
+          {/* List */}
+          <FlatList
+            data={filteredLeads}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.crmListContainer}
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item: lead }) => (
+              <CRMLeadCard 
+                lead={{...lead, campaignTitle: lead.campaignTitle || campaign.title}} 
+                onCall={() => onCall(lead)} 
+                onWhatsApp={() => onWhatsApp({ ...lead, campaignTitle: lead.campaignTitle || campaign.title })} 
+              />
+            )}
+            ListEmptyComponent={
+              <View style={styles.crmEmpty}>
+                <Ionicons name="inbox-outline" size={48} color="#CBD5E1" />
+                <Text style={styles.crmEmptyText}>No {filter !== 'All' ? filter : ''} leads are currently matching this view.</Text>
+              </View>
+            }
+          />
+          
+          {leads.length > 0 && (
+            <View style={styles.crmFloatingFooter}>
+              <BlurView intensity={40} tint="light" style={styles.crmMarkReadBtn}>
+                <Pressable onPress={() => markAllRead(leads)} style={styles.crmMarkReadPressable}>
+                   <Ionicons name="checkmark" size={16} color="#2563EB" style={{ marginRight: 6 }} />
+                   <Text style={styles.crmMarkReadText}>Mark all as Read</Text>
+                </Pressable>
+              </BlurView>
+            </View>
+          )}
+        </SafeAreaView>
+      </LinearGradient>
+    </Modal>
+  );
+}
+
 export default function SellerDashboardScreen({ navigation }) {
   const { user, logout, updateUserProfile } = useAuth();
   
@@ -446,6 +686,8 @@ export default function SellerDashboardScreen({ navigation }) {
     try {
       const fetchedCampaigns = await apiService.get('/campaigns?seller_mode=true');
       const fetchedLeads = await apiService.get('/leads');
+      const threads = await chatService.getThreads();
+      
       const mappedCampaigns = fetchedCampaigns
         .filter(camp => camp.image_url)
         .map(camp => ({
@@ -458,16 +700,20 @@ export default function SellerDashboardScreen({ navigation }) {
         image_urls: camp.image_urls || (camp.image_url ? [camp.image_url] : []),
         views: camp.view_count,
         leadsCount: camp.lead_count,
-        leads: fetchedLeads.filter(l => l.campaign_id === camp.id).map(l => ({
-          id: l.id,
-          name: l.name,
-          phone: l.phone,
-          status: l.label,
-          message: l.message,
-          isRead: l.is_read,
-          createdAt: l.created_at,
-          campaignTitle: l.campaign_title || camp.title,
-        })),
+        leads: fetchedLeads.filter(l => l.campaign_id === camp.id).map(l => {
+          const thread = threads.find(t => t.lead_id === l.id);
+          return {
+            id: l.id,
+            name: l.name,
+            phone: l.phone,
+            status: l.label,
+            message: l.message,
+            isRead: l.is_read,
+            createdAt: l.created_at,
+            campaignTitle: l.campaign_title || camp.title,
+            thread: thread || null,
+          };
+        }),
         businessName: camp.business_name || user?.name || 'Your Business',
         businessVerified: camp.business_verified ?? user?.verified ?? false,
       }));
@@ -600,21 +846,26 @@ export default function SellerDashboardScreen({ navigation }) {
   };
 
   const markLeadListAsRead = async (leads = []) => {
-    const unread = leads.filter(lead => lead.status === 'NEW' && !lead.isRead);
-    if (unread.length === 0) return;
+    const unreadLeads = leads.filter(lead => !lead.isRead || (lead.thread && lead.thread.seller_unread_count > 0));
+    if (unreadLeads.length === 0) return;
     
     // Optimistic local update
     setCampaigns(prev => prev.map(camp => ({
       ...camp,
       leads: camp.leads.map(lead => (
-        unread.some(item => item.id === lead.id)
-          ? { ...lead, isRead: true }
+        unreadLeads.some(item => item.id === lead.id)
+          ? { ...lead, isRead: true, thread: lead.thread ? { ...lead.thread, seller_unread_count: 0 } : null }
           : lead
       )),
     })));
 
     try {
-      await Promise.all(unread.map(lead => apiService.put(`/leads/${lead.id}`, { is_read: true })));
+      await Promise.all(unreadLeads.map(async lead => {
+        const p1 = lead.isRead ? Promise.resolve() : apiService.put(`/leads/${lead.id}`, { is_read: true });
+        const p2 = (lead.thread && lead.thread.seller_unread_count > 0) ? apiService.post(`/chat/threads/${lead.thread.id}/read`) : Promise.resolve();
+        return Promise.all([p1, p2]);
+      }));
+      await loadDashboardData(); // Refresh UI to ensure perfectly in sync
     } catch (error) {
       console.error('Failed to mark leads as read:', error);
     }
@@ -2439,72 +2690,15 @@ export default function SellerDashboardScreen({ navigation }) {
       />
 
       {/* LEAD INBOX MODAL */}
-      <Modal
-        visible={leadsModalVisible}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setLeadsModalVisible(false)}
-      >
-        <View style={styles.notificationsOverlay}>
-          <BlurView intensity={65} tint="light" style={styles.notificationsPanel}>
-            <View style={styles.notificationsHeader}>
-              <LinearGradient colors={['#38BDF8', '#2563EB']} style={styles.notificationsBell}>
-                <Ionicons name="mail-open-outline" size={34} color="#FFFFFF" />
-              </LinearGradient>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.notificationsTitle}>Lead Inbox</Text>
-                <Text style={styles.notificationsSubtitle} numberOfLines={1}>
-                  {selectedCampaignForLeads?.leads?.filter(lead => lead.status === 'NEW' && !lead.isRead).length || 0} new leads
-                </Text>
-              </View>
-            </View>
-            <Text style={styles.notificationsCampaignName} numberOfLines={1}>
-              {selectedCampaignForLeads?.title || 'Campaign leads'}
-            </Text>
-
-            <ScrollView style={styles.leadsScrollView} showsVerticalScrollIndicator={false}>
-              {(selectedCampaignForLeads?.leads || []).filter(lead => !dismissedLeadIds.includes(lead.id)).length === 0 ? (
-                <View style={styles.emptyNotificationsContainer}>
-                  <BlurView intensity={35} tint="light" style={styles.emptyBellWrap}>
-                    <Ionicons name="notifications-outline" size={54} color="#2563EB" />
-                  </BlurView>
-                  <Text style={styles.emptyNotificationsTitle}>No new notifications.</Text>
-                  <Text style={styles.emptyNotificationsText}>
-                    We'll notify you whenever a buyer shows interest.
-                  </Text>
-                </View>
-              ) : (
-                (selectedCampaignForLeads?.leads || [])
-                  .filter(lead => !dismissedLeadIds.includes(lead.id))
-                  .map((lead) => (
-                    <LeadNotificationCard
-                      key={lead.id}
-                      lead={{ ...lead, campaignTitle: lead.campaignTitle || selectedCampaignForLeads?.title }}
-                      onDismiss={dismissLeadNotification}
-                      onCall={() => callLead(lead)}
-                      onWhatsApp={() => chatLead({ ...lead, campaignTitle: lead.campaignTitle || selectedCampaignForLeads?.title })}
-                      onView={() => viewLeadDetails({ ...lead, campaignTitle: lead.campaignTitle || selectedCampaignForLeads?.title })}
-                    />
-                  ))
-              )}
-            </ScrollView>
-
-            <View style={styles.notificationsFooter}>
-              <Pressable
-                onPress={() => markLeadListAsRead(selectedCampaignForLeads?.leads || [])}
-                style={styles.markReadBtn}
-              >
-                <Text style={styles.markReadText}>Mark all as Read</Text>
-              </Pressable>
-              <Pressable onPress={() => setLeadsModalVisible(false)} style={styles.doneGradientWrap}>
-                <LinearGradient colors={['#2F80ED', '#56CCF2']} style={styles.doneGradientBtn}>
-                  <Text style={styles.doneGradientText}>Done</Text>
-                </LinearGradient>
-              </Pressable>
-            </View>
-          </BlurView>
-        </View>
-      </Modal>
+      <CRMLeadsModal 
+        visible={leadsModalVisible} 
+        onClose={() => setLeadsModalVisible(false)} 
+        campaign={selectedCampaignForLeads} 
+        dismissedLeadIds={dismissedLeadIds}
+        onCall={callLead} 
+        onWhatsApp={chatLead} 
+        markAllRead={markLeadListAsRead} 
+      />
 
       {/* NOTIFICATIONS MODAL (NEW LEADS) */}
       <Modal
@@ -4979,5 +5173,214 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '700',
     fontSize: 13,
+  },
+  crmContainer: {
+    flex: 1,
+  },
+  crmHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: 'transparent',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
+  },
+  crmBackBtn: {
+    marginRight: 16,
+  },
+  crmHeaderTitles: {
+    flex: 1,
+  },
+  crmHeaderTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  crmHeaderSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  crmSearchBtn: {
+    marginLeft: 16,
+  },
+  crmFilterWrapper: {
+    backgroundColor: 'transparent',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
+  },
+  crmFilterContainer: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  crmFilterChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  crmFilterChipActive: {
+    backgroundColor: 'rgba(59,130,246,0.08)',
+    borderColor: 'rgba(59,130,246,0.3)',
+  },
+  crmFilterText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  crmFilterTextActive: {
+    color: '#2563EB',
+  },
+  crmListContainer: {
+    padding: 16,
+    gap: 16,
+    paddingBottom: 100,
+  },
+  crmCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.45)', // Revert to softer translucency
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.8)',
+    borderLeftWidth: 5,
+    padding: 18,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowOffset: { width: 0, height: 3 },
+    shadowRadius: 10,
+    elevation: 2,
+    overflow: 'hidden',
+  },
+  crmCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  crmCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 12,
+  },
+  crmAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  crmAvatarText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  crmBuyerName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  crmPhoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  crmBuyerPhone: {
+    fontSize: 13,
+    color: '#64748B',
+  },
+  crmBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  crmBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  crmCardDivider: {
+    height: 1,
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    marginVertical: 14,
+  },
+  crmCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  crmDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  crmDate: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontWeight: '500',
+  },
+  crmActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  crmActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.8)',
+    gap: 4,
+  },
+  crmActionText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  crmEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  crmEmptyText: {
+    marginTop: 16,
+    fontSize: 15,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  crmFloatingFooter: {
+    position: 'absolute',
+    bottom: 24,
+    left: 24,
+    right: 24,
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  crmMarkReadBtn: {
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.8)',
+    overflow: 'hidden',
+  },
+  crmMarkReadPressable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+  },
+  crmMarkReadText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#2563EB',
   },
 });
