@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: reachlo-frontend
+    runtime: node
+    rootDir: REACHLO
+    build:
+      command: npm install
+    start:
+      command: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production

@@ -23,6 +23,9 @@ import { Ionicons } from '@expo/vector-icons';
 import Toast from '../components/Toast';
 import { useAuth } from '../context/AuthContext';
 import authService from '../services/authService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import COLORS from '../constants/colors';
+import { useTheme } from '../context/ThemeContext';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -60,12 +63,16 @@ const SLIDES = [
 ];
 
 export default function LoginScreen({ navigation }) {
+  const { theme: originalTheme, isDarkMode: originalIsDarkMode } = useTheme();
+  const theme = require('../constants/theme').SELLER_LIGHT_THEME;
+  const isDarkMode = false;
   const { login, clearAuth } = useAuth();
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
 
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
@@ -113,6 +120,23 @@ export default function LoginScreen({ navigation }) {
       ])
     ).start();
   }, [floatAnim]);
+
+  useEffect(() => {
+    const loadCredentials = async () => {
+      try {
+        const savedEmail = await AsyncStorage.getItem('sellerEmail');
+        const savedPassword = await AsyncStorage.getItem('sellerPassword');
+        if (savedEmail && savedPassword) {
+          setEmail(savedEmail);
+          setPassword(savedPassword);
+          setRememberMe(true);
+        }
+      } catch (err) {
+        console.log('Error loading credentials', err);
+      }
+    };
+    loadCredentials();
+  }, []);
 
   useEffect(() => {
     const keyboardWillShowSub = Keyboard.addListener(
@@ -207,6 +231,13 @@ export default function LoginScreen({ navigation }) {
       // ────────────────────────────────────────────────────────────────────
 
       if (response.role === 'SELLER') {
+        if (rememberMe) {
+          await AsyncStorage.setItem('sellerEmail', email.trim());
+          await AsyncStorage.setItem('sellerPassword', password);
+        } else {
+          await AsyncStorage.removeItem('sellerEmail');
+          await AsyncStorage.removeItem('sellerPassword');
+        }
         navigation.replace('SellerDashboard');
       } else if (response.role === 'ADMIN') {
         navigation.replace('AdminDashboard');
@@ -234,7 +265,7 @@ export default function LoginScreen({ navigation }) {
           <View style={styles.textContainer}>
             <Text style={styles.titleText}>
               {item.titleLine1}
-              <Text style={{ color: '#2563EB' }}>{item.titleBlue}</Text>
+              <Text style={{ color: COLORS.SELLER_PRIMARY }}>{item.titleBlue}</Text>
             </Text>
             <Text style={styles.subtitleText} numberOfLines={3}>{item.subtitle}</Text>
           </View>
@@ -255,7 +286,7 @@ export default function LoginScreen({ navigation }) {
   const [passFocused, setPassFocused] = useState(false);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
       <Toast
         visible={toastVisible}
         message={toastMessage}
@@ -266,11 +297,11 @@ export default function LoginScreen({ navigation }) {
       {/* Background Blobs */}
       <View style={StyleSheet.absoluteFillObject}>
         <LinearGradient
-          colors={['rgba(56, 189, 248, 0.4)', 'transparent']}
+          colors={['rgba(139, 92, 246, 0.4)', 'transparent']}
           style={styles.bgBlobTop}
         />
         <LinearGradient
-          colors={['rgba(37, 99, 235, 0.3)', 'transparent']}
+          colors={['rgba(124, 58, 237, 0.3)', 'transparent']}
           style={styles.bgBlobBottom}
         />
       </View>
@@ -344,7 +375,7 @@ export default function LoginScreen({ navigation }) {
                   <View style={styles.formContainer}>
                     {/* Email Input */}
                     <View style={[styles.inputContainer, emailFocused && styles.inputFocused]}>
-                      <Ionicons name="mail-outline" size={22} color={emailFocused ? '#2563EB' : '#475569'} style={styles.inputIcon} />
+                      <Ionicons name="mail-outline" size={22} color={emailFocused ? COLORS.SELLER_PRIMARY : '#475569'} style={styles.inputIcon} />
                       <TextInput
                         style={styles.inputField}
                         value={email}
@@ -364,7 +395,7 @@ export default function LoginScreen({ navigation }) {
 
                     {/* Password Input */}
                     <View style={[styles.inputContainer, passFocused && styles.inputFocused, { marginTop: 16 }]}>
-                      <Ionicons name="lock-closed-outline" size={22} color={passFocused ? '#2563EB' : '#475569'} style={styles.inputIcon} />
+                      <Ionicons name="lock-closed-outline" size={22} color={passFocused ? COLORS.SELLER_PRIMARY : '#475569'} style={styles.inputIcon} />
                       <TextInput
                         ref={passwordRef}
                         style={styles.inputField}
@@ -389,7 +420,19 @@ export default function LoginScreen({ navigation }) {
                     </View>
                     {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
 
-                    <View style={styles.forgotContainer}>
+                    <View style={styles.rememberForgotContainer}>
+                      <Pressable 
+                        style={styles.rememberMeContainer} 
+                        onPress={() => setRememberMe(!rememberMe)}
+                        disabled={loading}
+                      >
+                        <Ionicons 
+                          name={rememberMe ? "checkbox" : "square-outline"} 
+                          size={20} 
+                          color={rememberMe ? COLORS.SELLER_PRIMARY : '#94A3B8'} 
+                        />
+                        <Text style={styles.rememberMeText}>Remember me</Text>
+                      </Pressable>
                       <Pressable onPress={() => navigation.navigate('ForgotPassword')} disabled={loading}>
                         <Text style={styles.forgotText}>Forgot Password?</Text>
                       </Pressable>
@@ -405,7 +448,7 @@ export default function LoginScreen({ navigation }) {
                       ]}
                     >
                       <LinearGradient
-                        colors={['#38BDF8', '#2563EB']}
+                        colors={[COLORS.SELLER_PRIMARY_LIGHT, COLORS.SELLER_PRIMARY]}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 0 }}
                         style={styles.loginGradient}
@@ -450,7 +493,7 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   inputFocused: {
-    borderColor: '#2563EB',
+    borderColor: COLORS.SELLER_PRIMARY,
     backgroundColor: '#FFFFFF',
   },
   keyboardView: {
@@ -555,13 +598,13 @@ const styles = StyleSheet.create({
   indicatorActive: {
     width: 30,
     height: 6,
-    backgroundColor: '#2563EB',
+    backgroundColor: COLORS.SELLER_PRIMARY,
     borderRadius: 3,
   },
   indicatorInactive: {
     width: 8,
     height: 6,
-    backgroundColor: 'rgba(37,99,235,0.3)',
+    backgroundColor: 'rgba(124, 58, 237, 0.3)',
     borderRadius: 3,
   },
 
@@ -598,17 +641,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(37,99,235,0.08)',
+    backgroundColor: 'rgba(124, 58, 237, 0.08)',
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(37,99,235,0.2)',
+    borderColor: 'rgba(124, 58, 237, 0.2)',
     marginBottom: 4,
   },
   roleBadgeText: {
     fontSize: 12,
-    color: '#2563EB',
+    color: COLORS.SELLER_PRIMARY,
     fontWeight: '700',
     letterSpacing: 0.3,
   },
@@ -672,13 +715,25 @@ const styles = StyleSheet.create({
   eyeIcon: {
     padding: 4,
   },
-  forgotContainer: {
-    alignItems: 'flex-end',
+  rememberForgotContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginTop: 12,
     marginBottom: 24,
   },
+  rememberMeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  rememberMeText: {
+    color: '#475569',
+    fontSize: 14,
+    fontWeight: '500',
+  },
   forgotText: {
-    color: '#2563EB',
+    color: COLORS.SELLER_PRIMARY,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -686,7 +741,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 60,
     borderRadius: 18,
-    shadowColor: '#2563EB',
+    shadowColor: COLORS.SELLER_PRIMARY,
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.3,
     shadowRadius: 20,
@@ -757,7 +812,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   signupText: {
-    color: '#2563EB',
+    color: COLORS.SELLER_PRIMARY,
     fontSize: 15,
     fontWeight: '800',
   },

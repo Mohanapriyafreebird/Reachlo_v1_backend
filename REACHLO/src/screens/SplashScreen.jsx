@@ -8,9 +8,8 @@ import {
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import COLORS from '../constants/colors';
-import { FONT_SIZES, FONT_WEIGHTS, LINE_HEIGHTS } from '../constants/typography';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import API_CONFIG from '../config/apiConfig';
 
@@ -18,81 +17,84 @@ const { width, height } = Dimensions.get('window');
 
 // ── Reachlo Logo — recreated from brand reference ──────────────────────────
 function ReachloLogo({ size = 100 }) {
-  const arcSize = size;
-  const strokeWidth = arcSize * 0.08;
+  const arcSize = size * 0.7;
+  const strokeWidth = arcSize * 0.12;
 
   return (
-    <View style={[logoStyles.container, { width: arcSize, height: arcSize }]}>
-      {/* Outer arc — teal/cyan right side */}
-      <View
-        style={[
-          logoStyles.arcOuter,
-          {
-            width: arcSize,
-            height: arcSize,
-            borderRadius: arcSize / 2,
-            borderWidth: strokeWidth,
-            borderColor: COLORS.ACCENT_CYAN,
-            borderTopColor: 'transparent',
-            borderLeftColor: 'transparent',
-          },
-        ]}
-      />
-      {/* Inner arc — purple/indigo left side */}
-      <View
-        style={[
-          logoStyles.arcInner,
-          {
-            width: arcSize * 0.72,
-            height: arcSize * 0.72,
-            borderRadius: (arcSize * 0.72) / 2,
-            borderWidth: strokeWidth,
-            borderColor: COLORS.ACCENT_PURPLE,
-            borderBottomColor: 'transparent',
-            borderRightColor: 'transparent',
-            top: arcSize * 0.14,
-            left: arcSize * 0.14,
-          },
-        ]}
-      />
-      {/* Letter R */}
-      <Text
-        style={[
-          logoStyles.letterR,
-          {
-            fontSize: arcSize * 0.38,
-            lineHeight: arcSize * 0.44,
-          },
-        ]}
-        accessibilityLabel="Reachlo logo R"
-      >
-        R
-      </Text>
+    <View style={[logoStyles.appIconContainer, { width: size, height: size }]}>
+      <View style={[logoStyles.container, { width: arcSize, height: arcSize }]}>
+        {/* Outer arc — teal/cyan bottom */}
+        <View
+          style={[
+            logoStyles.arcOuter,
+            {
+              width: arcSize,
+              height: arcSize,
+              borderRadius: arcSize / 2,
+              borderWidth: strokeWidth,
+              borderColor: '#14B8A6',
+              borderTopColor: 'transparent',
+            },
+          ]}
+        />
+        {/* Inner arc — purple/indigo */}
+        <View
+          style={[
+            logoStyles.arcInner,
+            {
+              width: arcSize * 0.75,
+              height: arcSize * 0.75,
+              borderRadius: (arcSize * 0.75) / 2,
+              borderWidth: strokeWidth,
+              borderColor: '#A78BFA',
+              borderTopColor: 'transparent',
+              top: arcSize * 0.125,
+              left: arcSize * 0.125,
+            },
+          ]}
+        />
+        {/* Letter R */}
+        <Text
+          style={[
+            logoStyles.letterR,
+            {
+              fontSize: arcSize * 0.45,
+            },
+          ]}
+        >
+          R
+        </Text>
+      </View>
     </View>
   );
 }
 
 const logoStyles = StyleSheet.create({
+  appIconContainer: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   container: {
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
+    marginTop: -8, // slight offset to balance the bottom-heavy arcs
   },
   arcOuter: {
     position: 'absolute',
     top: 0,
     left: 0,
-    transform: [{ rotate: '45deg' }],
   },
   arcInner: {
     position: 'absolute',
-    transform: [{ rotate: '225deg' }],
   },
   letterR: {
-    fontWeight: FONT_WEIGHTS.BOLD,
-    color: COLORS.TEXT_PRIMARY,
-    includeFontPadding: false,
-    letterSpacing: -1,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    position: 'absolute',
+    top: '10%',
   },
 });
 // ────────────────────────────────────────────────────────────────────────────
@@ -101,354 +103,204 @@ export default function SplashScreen({ navigation }) {
   const { token, role, isLoading } = useAuth();
 
   // Animation values
-  const logoOpacity = useRef(new Animated.Value(0)).current;
-  const logoScale = useRef(new Animated.Value(0.8)).current;
-  const taglineOpacity = useRef(new Animated.Value(0)).current;
-  const taglineTranslateY = useRef(new Animated.Value(20)).current;
-  const btnsOpacity = useRef(new Animated.Value(0)).current;
-  const btnsTranslateY = useRef(new Animated.Value(40)).current;
-  const bgScale = useRef(new Animated.Value(1.1)).current;
+  const contentOpacity = useRef(new Animated.Value(0)).current;
+  const contentTranslateY = useRef(new Animated.Value(20)).current;
 
   const [timerDone, setTimerDone] = useState(false);
   const [showButtons, setShowButtons] = useState(false);
 
-  // Step 1: Entry animations + backend wakeup ping
   useEffect(() => {
-    // ── Fire-and-forget backend wakeup ping ──────────────────────────────────
-    // Render.com free tier cold-starts in 30-60s. By pinging /health during
-    // the splash animation, the backend is warm before the user tries to login.
-    fetch(`${API_CONFIG.BASE_URL}/health`, { method: 'GET' }).catch(() => {});
-    // ────────────────────────────────────────────────────────────────────────
+    fetch(`${API_CONFIG.BASE_URL}/health`, { method: 'GET' }).catch(() => { });
 
-    // Background settle
-    Animated.timing(bgScale, {
-      toValue: 1,
-      duration: 800,
-      useNativeDriver: true,
-    }).start();
-
-    // Logo fade + scale in
     Animated.parallel([
-      Animated.timing(logoOpacity, { toValue: 1, duration: 700, useNativeDriver: true }),
-      Animated.spring(logoScale, {
-        toValue: 1,
-        tension: 60,
-        friction: 7,
-        useNativeDriver: true,
-      }),
+      Animated.timing(contentOpacity, { toValue: 1, duration: 800, useNativeDriver: true }),
+      Animated.timing(contentTranslateY, { toValue: 0, duration: 800, useNativeDriver: true }),
     ]).start();
 
-    // Tagline slides in after logo
-    setTimeout(() => {
-      Animated.parallel([
-        Animated.timing(taglineOpacity, { toValue: 1, duration: 600, useNativeDriver: true }),
-        Animated.timing(taglineTranslateY, {
-          toValue: 0,
-          duration: 600,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }, 400);
-
-    // 2-second minimum display
-    const timer = setTimeout(() => setTimerDone(true), 2000);
+    const timer = setTimeout(() => setTimerDone(true), 1500);
     return () => clearTimeout(timer);
   }, []);
 
-  // Step 2: After timer + auth — navigate or show buttons
   useEffect(() => {
     if (!timerDone || isLoading) return;
 
-    const decide = async () => {
-      if (token && role) {
-        // Already logged in — go straight to dashboard
-        if (role === 'SELLER') navigation.replace('SellerDashboard');
-        else if (role === 'ADMIN') navigation.replace('AdminDashboard');
-        else navigation.replace('DiscoveryFeed');
-      } else {
-        // Show CTA buttons with animation
-        setShowButtons(true);
-        Animated.parallel([
-          Animated.timing(btnsOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
-          Animated.spring(btnsTranslateY, {
-            toValue: 0,
-            tension: 50,
-            friction: 8,
-            useNativeDriver: true,
-          }),
-        ]).start();
-      }
-    };
-
-    decide();
+    if (token && role) {
+      if (role === 'SELLER') navigation.replace('SellerDashboard');
+      else if (role === 'ADMIN') navigation.replace('AdminDashboard');
+      else navigation.replace('DiscoveryFeed');
+    } else {
+      setShowButtons(true);
+    }
   }, [timerDone, isLoading, token, role]);
 
-  const handleSellerPress = () => {
-    navigation.navigate('Register', { defaultRole: 'SELLER' });
-  };
-
-  const handleBuyerPress = () => {
-    navigation.navigate('Register', { defaultRole: 'BUYER' });
-  };
-
-  const handleLoginPress = () => {
-    navigation.navigate('Login');
-  };
-
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Decorative background circles */}
-      <Animated.View
-        style={[styles.bgCircleTop, { transform: [{ scale: bgScale }] }]}
-      />
-      <Animated.View
-        style={[styles.bgCircleBottom, { transform: [{ scale: bgScale }] }]}
+    <View style={styles.container}>
+      <LinearGradient
+        colors={['#7C3AED', '#4C1D95', '#2E1065']}
+        style={StyleSheet.absoluteFill}
       />
 
-      {/* Main content */}
-      <View style={styles.content}>
-        {/* Logo */}
-        <Animated.View
-          style={[
-            styles.logoContainer,
-            { opacity: logoOpacity, transform: [{ scale: logoScale }] },
-          ]}
-        >
-          <ReachloLogo size={110} />
-          <Text style={styles.brandName}>REACHLO</Text>
-        </Animated.View>
+      {/* Decorative Orbs */}
+      <View style={[styles.orb, { top: height * 0.1, left: -40, width: 200, height: 200, borderRadius: 100 }]} />
+      <View style={[styles.orb, { bottom: -60, right: -60, width: 250, height: 250, borderRadius: 125 }]} />
 
-        {/* Tagline */}
+      <SafeAreaView style={styles.safeArea}>
         <Animated.View
           style={[
-            styles.taglineContainer,
+            styles.content,
             {
-              opacity: taglineOpacity,
-              transform: [{ translateY: taglineTranslateY }],
+              opacity: contentOpacity,
+              transform: [{ translateY: contentTranslateY }],
             },
           ]}
         >
-          <Text style={styles.tagline}>Where Businesses{'\n'}Meet Real Buyers</Text>
-          <Text style={styles.subTagline}>
-            India's platform for time-bound campaigns{'\n'}and verified local connections
-          </Text>
+          {/* Logo & Branding */}
+          <View style={styles.brandingContainer}>
+            <ReachloLogo size={110} />
+            <Text style={styles.brandName}>REACHLO</Text>
+            <Text style={styles.tagline}>
+              Connecting Businesses{'\n'}with Local Creators
+            </Text>
+          </View>
+
+
+
+          {/* Action Buttons & Footer */}
+          <View style={styles.bottomSection}>
+            {showButtons && (
+              <>
+                <Pressable
+                  onPress={() => navigation.navigate('Register', { defaultRole: 'SELLER' })}
+                  style={({ pressed }) => [styles.glassButton, pressed && { opacity: 0.8 }]}
+                >
+                  <View style={styles.buttonTextWrap}>
+                    <Text style={styles.buttonTitle}>Grow Your Business</Text>
+                    <Text style={styles.buttonSubtitle}>For businesses & sellers</Text>
+                  </View>
+                  <Text style={styles.buttonArrow}>→</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => navigation.navigate('Register', { defaultRole: 'BUYER' })}
+                  style={({ pressed }) => [styles.glassButton, { backgroundColor: 'transparent', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' }, pressed && { opacity: 0.8 }]}
+                >
+                  <View style={styles.buttonTextWrap}>
+                    <Text style={styles.buttonTitle}>Explore Amazing Offers</Text>
+                    <Text style={styles.buttonSubtitle}>For shoppers & buyers</Text>
+                  </View>
+                  <Text style={styles.buttonArrow}>→</Text>
+                </Pressable>
+              </>
+            )}
+          </View>
         </Animated.View>
 
-        {/* CTA Buttons — appear after auth check */}
-        {showButtons && (
-          <Animated.View
-            style={[
-              styles.buttonsContainer,
-              {
-                opacity: btnsOpacity,
-                transform: [{ translateY: btnsTranslateY }],
-              },
-            ]}
-          >
-            {/* Seller CTA */}
-            <Pressable
-              onPress={handleSellerPress}
-              style={({ pressed }) => [
-                styles.sellerButton,
-                pressed && styles.buttonPressed,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Grow Your Business — for businesses"
-            >
-              
-              <View style={styles.buttonTextContainer}>
-                <Text style={styles.sellerButtonTitle}>Grow Your Business</Text>
-                <Text style={styles.buttonSubtext}>For businesses & sellers</Text>
-              </View>
-              <Text style={styles.buttonArrow}>→</Text>
-            </Pressable>
-
-            {/* Buyer CTA */}
-            <Pressable
-              onPress={handleBuyerPress}
-              style={({ pressed }) => [
-                styles.buyerButton,
-                pressed && styles.buttonPressed,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Explore Amazing Offers — for buyers"
-            >
-               
-              <View style={styles.buttonTextContainer}>
-                <Text style={styles.buyerButtonTitle}>Explore Amazing Offers</Text>
-                <Text style={styles.buyerButtonSubtext}>For shoppers & buyers</Text>
-              </View>
-              <Text style={styles.buyerButtonArrow}>→</Text>
-            </Pressable>
-          </Animated.View>
-        )}
-      </View>
-
-      {/* Footer */}
-      <Text style={styles.footerText}>© 2026 Reachlo by Sorven Global</Text>
-    </SafeAreaView>
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>Version 1.0.0</Text>
+          <Text style={styles.footerText}>
+            Made with <Text style={{ color: '#EF4444' }}></Text> by Sorven Global
+          </Text>
+        </View>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.BACKGROUND,
   },
-
-  // Decorative background elements
-  bgCircleTop: {
+  orb: {
     position: 'absolute',
-    width: width * 1.2,
-    height: width * 1.2,
-    borderRadius: width * 0.6,
-    backgroundColor: COLORS.PRIMARY_ULTRA_LIGHT,
-    top: -width * 0.55,
-    right: -width * 0.2,
+    backgroundColor: '#8B5CF6',
+    opacity: 0.15,
   },
-  bgCircleBottom: {
-    position: 'absolute',
-    width: width * 0.8,
-    height: width * 0.8,
-    borderRadius: width * 0.4,
-    backgroundColor: COLORS.SURFACE_2,
-    bottom: -width * 0.3,
-    left: -width * 0.15,
-    opacity: 0.6,
+  safeArea: {
+    flex: 1,
+    justifyContent: 'space-between',
   },
-
   content: {
     flex: 1,
-    paddingHorizontal: 28,
-    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingTop: height * 0.08,
     alignItems: 'center',
   },
-
-  // Logo
-  logoContainer: {
+  brandingContainer: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 40,
   },
   brandName: {
-    fontSize: FONT_SIZES.XL,
-    fontWeight: FONT_WEIGHTS.BOLD,
-    color: COLORS.TEXT_PRIMARY,
-    letterSpacing: 6,
-    marginTop: 14,
-  },
-
-  // Tagline
-  taglineContainer: {
-    alignItems: 'center',
-    marginBottom: 48,
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 4,
+    marginTop: 20,
+    marginBottom: 16,
   },
   tagline: {
-    fontSize: FONT_SIZES.XL,
-    fontWeight: FONT_WEIGHTS.BOLD,
-    color: COLORS.TEXT_PRIMARY,
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.85)',
     textAlign: 'center',
-    lineHeight: FONT_SIZES.XL * LINE_HEIGHTS.TIGHT,
-    marginBottom: 12,
-  },
-  subTagline: {
-    fontSize: FONT_SIZES.SM,
-    fontWeight: FONT_WEIGHTS.REGULAR,
-    color: COLORS.TEXT_SECONDARY,
-    textAlign: 'center',
-    lineHeight: FONT_SIZES.SM * LINE_HEIGHTS.RELAXED,
+    lineHeight: 24,
+    fontWeight: '500',
   },
 
-  // CTA Buttons
-  buttonsContainer: {
+  bottomSection: {
     width: '100%',
-    alignItems: 'center',
+    marginTop: 'auto',
+    marginBottom: 20,
   },
-  sellerButton: {
+  glassButton: {
+    width: '100%',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 20,
+    paddingVertical: 18,
+    paddingHorizontal: 24,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.PRIMARY,
-    borderRadius: 16,
-    paddingVertical: 18,
-    paddingHorizontal: 20,
-    marginBottom: 14,
-    width: '100%',
-    shadowColor: COLORS.PRIMARY,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 8,
+    justifyContent: 'space-between',
+    marginBottom: 16,
   },
-  buyerButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.WHITE,
-    borderRadius: 16,
-    paddingVertical: 18,
-    paddingHorizontal: 20,
-    marginBottom: 28,
-    width: '100%',
-    borderWidth: 2,
-    borderColor: COLORS.PRIMARY,
-    shadowColor: COLORS.PRIMARY,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  buttonPressed: {
-    opacity: 0.88,
-    transform: [{ scale: 0.98 }],
-  },
-  sellerButtonIcon: {
-    fontSize: 26,
-    marginRight: 14,
-  },
-  buyerButtonIcon: {
-    fontSize: 26,
-    marginRight: 14,
-  },
-  buttonTextContainer: {
+  buttonTextWrap: {
     flex: 1,
   },
-  sellerButtonTitle: {
-    fontSize: FONT_SIZES.BASE,
-    fontWeight: FONT_WEIGHTS.BOLD,
-    color: COLORS.WHITE,
-    marginBottom: 2,
+  buttonTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 4,
   },
-  buttonSubtext: {
-    fontSize: FONT_SIZES.XS,
-    color: COLORS.PRIMARY_LIGHT,
-    fontWeight: FONT_WEIGHTS.MEDIUM,
-  },
-  buyerButtonTitle: {
-    fontSize: FONT_SIZES.BASE,
-    fontWeight: FONT_WEIGHTS.BOLD,
-    color: COLORS.PRIMARY,
-    marginBottom: 2,
-  },
-  buyerButtonSubtext: {
-    fontSize: FONT_SIZES.XS,
-    color: COLORS.TEXT_SECONDARY,
-    fontWeight: FONT_WEIGHTS.MEDIUM,
+  buttonSubtitle: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 13,
+    fontWeight: '500',
   },
   buttonArrow: {
+    color: '#FFFFFF',
     fontSize: 20,
-    color: COLORS.WHITE,
-    fontWeight: FONT_WEIGHTS.BOLD,
+    fontWeight: 'bold',
   },
-  buyerButtonArrow: {
-    fontSize: 20,
-    color: COLORS.PRIMARY,
-    fontWeight: FONT_WEIGHTS.BOLD,
+  loginLink: {
+    marginTop: 16,
+    alignItems: 'center',
+    paddingVertical: 10,
   },
-
-  // Footer
-  footerText: {
-    textAlign: 'center',
-    fontSize: FONT_SIZES.XS,
-    color: COLORS.TEXT_SECONDARY,
-    opacity: 0.7,
+  loginText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 14,
+  },
+  loginTextBold: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+  },
+  footer: {
+    alignItems: 'center',
     paddingBottom: 20,
   },
+  footerText: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 12,
+    marginBottom: 2,
+  },
 });
+

@@ -12,11 +12,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import COLORS from '../constants/colors';
+import { useRoleTheme } from '../context/ThemeContext';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/typography';
 
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 
-export default function AboutScreen({ navigation }) {
+export default function AboutScreen({ navigation, route }) {
+  const { theme, isDarkMode } = useRoleTheme(route?.params?.themeRole);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
 
@@ -37,20 +39,20 @@ export default function AboutScreen({ navigation }) {
   }, []);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
       {/* BACKGROUND GRADIENT BLOBS */}
       <View style={styles.bgBlobTopRight} />
       <View style={styles.bgBlobBottomLeft} />
 
       {/* 1. TOP NAVIGATION */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
         <Pressable 
           style={({ pressed }) => [styles.backButton, pressed && styles.pressed]} 
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="chevron-back" size={24} color={COLORS.TEXT_PRIMARY} />
+          <Ionicons name="chevron-back" size={24} color={theme.text} />
         </Pressable>
-        <Text style={styles.headerLogo}>REACHLO</Text>
+        <Text style={[styles.headerLogo, { color: theme.text }]}>REACHLO</Text>
         <View style={styles.headerRight} />
       </View>
 
@@ -62,46 +64,46 @@ export default function AboutScreen({ navigation }) {
             <Text style={styles.badgeText}>ABOUT REACHLO</Text>
           </View>
           
-          <Text style={styles.heroTitle}>
+          <Text style={[styles.heroTitle, { color: theme.text }]}>
             Connecting{' '}
             <Text style={styles.heroHighlight}>Local Businesses</Text>
             {' '}With Local Buyers.
           </Text>
           
-          <Text style={styles.heroSubtitle}>
+          <Text style={[styles.heroSubtitle, { color: theme.textSecondary }]}>
             REACHLO is an AI-powered hyperlocal marketing platform built to help small and local businesses reach the right buyers in their city.
           </Text>
         </Animated.View>
 
         {/* 3. WHO WE ARE */}
         <View style={styles.section}>
-          <View style={styles.glassCard}>
-            <Text style={styles.sectionTitle}>Who We Are</Text>
-            <Text style={styles.bodyText}>
+          <View style={[styles.glassCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Who We Are</Text>
+            <Text style={[styles.bodyText, { color: theme.textSecondary }]}>
               Every local business deserves the same marketing power that big brands have. REACHLO makes that possible by helping businesses get discovered by the right buyers without needing a large marketing budget or digital agency.
             </Text>
             
             <View style={styles.threePillars}>
               <View style={styles.pillarCard}>
-                <View style={styles.iconContainerBlue}>
+                <View style={[styles.iconContainerBlue, { backgroundColor: isDarkMode ? 'rgba(37, 99, 235, 0.2)' : '#EAF2FF' }]}>
                   <Ionicons name="storefront" size={20} color="#2563EB" />
                 </View>
-                <Text style={styles.pillarTitle}>Local Businesses</Text>
-                <Text style={styles.pillarDesc}>Get discovered</Text>
+                <Text style={[styles.pillarTitle, { color: theme.text }]}>Local Businesses</Text>
+                <Text style={[styles.pillarDesc, { color: theme.textTertiary }]}>Get discovered</Text>
               </View>
               <View style={styles.pillarCard}>
-                <View style={styles.iconContainerBlue}>
+                <View style={[styles.iconContainerBlue, { backgroundColor: isDarkMode ? 'rgba(37, 99, 235, 0.2)' : '#EAF2FF' }]}>
                   <Ionicons name="location" size={20} color="#2563EB" />
                 </View>
-                <Text style={styles.pillarTitle}>Nearby Buyers</Text>
-                <Text style={styles.pillarDesc}>Find what matters</Text>
+                <Text style={[styles.pillarTitle, { color: theme.text }]}>Nearby Buyers</Text>
+                <Text style={[styles.pillarDesc, { color: theme.textTertiary }]}>Find what matters</Text>
               </View>
               <View style={styles.pillarCard}>
-                <View style={styles.iconContainerBlue}>
+                <View style={[styles.iconContainerBlue, { backgroundColor: isDarkMode ? 'rgba(37, 99, 235, 0.2)' : '#EAF2FF' }]}>
                   <Ionicons name="hardware-chip" size={20} color="#2563EB" />
                 </View>
-                <Text style={styles.pillarTitle}>AI Marketing</Text>
-                <Text style={styles.pillarDesc}>Grow smarter</Text>
+                <Text style={[styles.pillarTitle, { color: theme.text }]}>AI Marketing</Text>
+                <Text style={[styles.pillarDesc, { color: theme.textTertiary }]}>Grow smarter</Text>
               </View>
             </View>
           </View>
@@ -109,33 +111,33 @@ export default function AboutScreen({ navigation }) {
 
         {/* 4. WHAT WE DO */}
         <View style={styles.section}>
-          <Text style={styles.sectionHeader}>What We Do</Text>
+          <Text style={[styles.sectionHeader, { color: theme.text }]}>What We Do</Text>
           <View style={styles.roleCardsContainer}>
             {/* Seller Card */}
-            <View style={styles.roleCard}>
-              <Text style={styles.roleTitle}>For Sellers</Text>
-              <Text style={styles.bodyTextSmall}>
+            <View style={[styles.roleCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+              <Text style={[styles.roleTitle, { color: theme.text }]}>For Sellers</Text>
+              <Text style={[styles.bodyTextSmall, { color: theme.textSecondary }]}>
                 Create AI-generated campaigns in minutes, reach buyers in your city, track leads and grow your business — all from your phone.
               </Text>
               <View style={styles.chipsContainer}>
-                <View style={styles.chip}><Text style={styles.chipText}>AI Campaigns</Text></View>
-                <View style={styles.chip}><Text style={styles.chipText}>Lead Tracking</Text></View>
-                <View style={styles.chip}><Text style={styles.chipText}>Local Reach</Text></View>
-                <View style={styles.chip}><Text style={styles.chipText}>Analytics</Text></View>
+                <View style={[styles.chip, { backgroundColor: isDarkMode ? 'rgba(37, 99, 235, 0.2)' : '#EAF2FF' }]}><Text style={styles.chipText}>AI Campaigns</Text></View>
+                <View style={[styles.chip, { backgroundColor: isDarkMode ? 'rgba(37, 99, 235, 0.2)' : '#EAF2FF' }]}><Text style={styles.chipText}>Lead Tracking</Text></View>
+                <View style={[styles.chip, { backgroundColor: isDarkMode ? 'rgba(37, 99, 235, 0.2)' : '#EAF2FF' }]}><Text style={styles.chipText}>Local Reach</Text></View>
+                <View style={[styles.chip, { backgroundColor: isDarkMode ? 'rgba(37, 99, 235, 0.2)' : '#EAF2FF' }]}><Text style={styles.chipText}>Analytics</Text></View>
               </View>
             </View>
 
             {/* Buyer Card */}
-            <View style={styles.roleCard}>
-              <Text style={styles.roleTitle}>For Buyers</Text>
-              <Text style={styles.bodyTextSmall}>
+            <View style={[styles.roleCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+              <Text style={[styles.roleTitle, { color: theme.text }]}>For Buyers</Text>
+              <Text style={[styles.bodyTextSmall, { color: theme.textSecondary }]}>
                 Discover the best local deals and businesses around you, claim exclusive offers and connect directly with sellers.
               </Text>
               <View style={styles.chipsContainer}>
-                <View style={styles.chip}><Text style={styles.chipText}>Local Deals</Text></View>
-                <View style={styles.chip}><Text style={styles.chipText}>Nearby Businesses</Text></View>
-                <View style={styles.chip}><Text style={styles.chipText}>Exclusive Offers</Text></View>
-                <View style={styles.chip}><Text style={styles.chipText}>Direct Chat</Text></View>
+                <View style={[styles.chip, { backgroundColor: isDarkMode ? 'rgba(37, 99, 235, 0.2)' : '#EAF2FF' }]}><Text style={styles.chipText}>Local Deals</Text></View>
+                <View style={[styles.chip, { backgroundColor: isDarkMode ? 'rgba(37, 99, 235, 0.2)' : '#EAF2FF' }]}><Text style={styles.chipText}>Nearby Businesses</Text></View>
+                <View style={[styles.chip, { backgroundColor: isDarkMode ? 'rgba(37, 99, 235, 0.2)' : '#EAF2FF' }]}><Text style={styles.chipText}>Exclusive Offers</Text></View>
+                <View style={[styles.chip, { backgroundColor: isDarkMode ? 'rgba(37, 99, 235, 0.2)' : '#EAF2FF' }]}><Text style={styles.chipText}>Direct Chat</Text></View>
               </View>
             </View>
           </View>
@@ -161,58 +163,58 @@ export default function AboutScreen({ navigation }) {
 
         {/* 6. WHY REACHLO */}
         <View style={styles.section}>
-          <Text style={styles.sectionHeader}>Why REACHLO?</Text>
+          <Text style={[styles.sectionHeader, { color: theme.text }]}>Why REACHLO?</Text>
           <View style={styles.gridContainer}>
-            <View style={styles.gridCard}>
-              <View style={styles.iconContainerBlue}>
+            <View style={[styles.gridCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+              <View style={[styles.iconContainerBlue, { backgroundColor: isDarkMode ? 'rgba(37, 99, 235, 0.2)' : '#EAF2FF' }]}>
                 <Ionicons name="hardware-chip" size={22} color="#2563EB" />
               </View>
-              <Text style={styles.gridCardTitle}>AI-Powered Campaigns</Text>
-              <Text style={styles.gridCardDesc}>Our AI reads your business description and creates compelling campaign content in seconds.</Text>
+              <Text style={[styles.gridCardTitle, { color: theme.text }]}>AI-Powered Campaigns</Text>
+              <Text style={[styles.gridCardDesc, { color: theme.textSecondary }]}>Our AI reads your business description and creates compelling campaign content in seconds.</Text>
             </View>
             
-            <View style={styles.gridCard}>
-              <View style={styles.iconContainerBlue}>
+            <View style={[styles.gridCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+              <View style={[styles.iconContainerBlue, { backgroundColor: isDarkMode ? 'rgba(37, 99, 235, 0.2)' : '#EAF2FF' }]}>
                 <Ionicons name="location" size={22} color="#2563EB" />
               </View>
-              <Text style={styles.gridCardTitle}>Hyperlocal Discovery</Text>
-              <Text style={styles.gridCardDesc}>Buyers discover businesses based on location, category and relevance.</Text>
+              <Text style={[styles.gridCardTitle, { color: theme.text }]}>Hyperlocal Discovery</Text>
+              <Text style={[styles.gridCardDesc, { color: theme.textSecondary }]}>Buyers discover businesses based on location, category and relevance.</Text>
             </View>
 
-            <View style={styles.gridCard}>
-              <View style={styles.iconContainerBlue}>
+            <View style={[styles.gridCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+              <View style={[styles.iconContainerBlue, { backgroundColor: isDarkMode ? 'rgba(37, 99, 235, 0.2)' : '#EAF2FF' }]}>
                 <Ionicons name="chatbubbles" size={22} color="#2563EB" />
               </View>
-              <Text style={styles.gridCardTitle}>Direct Connection</Text>
-              <Text style={styles.gridCardDesc}>Connect instantly through in-app chat or WhatsApp.</Text>
+              <Text style={[styles.gridCardTitle, { color: theme.text }]}>Direct Connection</Text>
+              <Text style={[styles.gridCardDesc, { color: theme.textSecondary }]}>Connect instantly through in-app chat or WhatsApp.</Text>
             </View>
 
-            <View style={styles.gridCard}>
-              <View style={styles.iconContainerBlue}>
+            <View style={[styles.gridCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+              <View style={[styles.iconContainerBlue, { backgroundColor: isDarkMode ? 'rgba(37, 99, 235, 0.2)' : '#EAF2FF' }]}>
                 <Ionicons name="bar-chart" size={22} color="#2563EB" />
               </View>
-              <Text style={styles.gridCardTitle}>Real-Time Analytics</Text>
-              <Text style={styles.gridCardDesc}>Track views, leads and campaign performance from your dashboard.</Text>
+              <Text style={[styles.gridCardTitle, { color: theme.text }]}>Real-Time Analytics</Text>
+              <Text style={[styles.gridCardDesc, { color: theme.textSecondary }]}>Track views, leads and campaign performance from your dashboard.</Text>
             </View>
           </View>
         </View>
 
         {/* 7. OUR STORY */}
         <View style={styles.section}>
-          <Text style={styles.sectionHeader}>Our Story</Text>
-          <View style={styles.glassCard}>
-            <Text style={styles.storyStartText}>REACHLO was born from a simple observation.</Text>
+          <Text style={[styles.sectionHeader, { color: theme.text }]}>Our Story</Text>
+          <View style={[styles.glassCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+            <Text style={[styles.storyStartText, { color: theme.text }]}>REACHLO was born from a simple observation.</Text>
 
-            <Text style={styles.bodyText}>
+            <Text style={[styles.bodyText, { color: theme.textSecondary }]}>
               Local businesses in India spend thousands on pamphlets, banners and word-of-mouth — but still struggle to reach buyers beyond their immediate circle.
             </Text>
-            <Text style={[styles.bodyText, { marginTop: 8 }]}>
+            <Text style={[styles.bodyText, { marginTop: 8, color: theme.textSecondary }]}>
               Meanwhile, buyers have no easy way to discover the best local deals around them.
             </Text>
-            <Text style={[styles.bodyText, { marginTop: 8, fontWeight: '600' }]}>
+            <Text style={[styles.bodyText, { marginTop: 8, fontWeight: '600', color: theme.textSecondary }]}>
               We set out to fix that.
             </Text>
-            <Text style={[styles.bodyText, { marginTop: 8, color: '#2563EB', fontWeight: 'bold' }]}>
+            <Text style={[styles.bodyText, { marginTop: 8, color: isDarkMode ? '#60A5FA' : '#2563EB', fontWeight: 'bold' }]}>
               REACHLO is built with love in India, for India's vibrant small business community.
             </Text>
           </View>
@@ -220,59 +222,59 @@ export default function AboutScreen({ navigation }) {
 
         {/* 8. OUR VALUES */}
         <View style={styles.section}>
-          <Text style={styles.sectionHeader}>Our Values</Text>
+          <Text style={[styles.sectionHeader, { color: theme.text }]}>Our Values</Text>
           <View style={styles.gridContainer}>
-            <View style={styles.gridCard}>
-              <View style={styles.iconContainerBlue}>
+            <View style={[styles.gridCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+              <View style={[styles.iconContainerBlue, { backgroundColor: isDarkMode ? 'rgba(37, 99, 235, 0.2)' : '#EAF2FF' }]}>
                 <Ionicons name="color-wand-outline" size={24} color="#2563EB" />
               </View>
-              <Text style={styles.gridCardTitle}>Simplicity First</Text>
-              <Text style={styles.gridCardDesc}>Technology should work for you, not the other way around.</Text>
+              <Text style={[styles.gridCardTitle, { color: theme.text }]}>Simplicity First</Text>
+              <Text style={[styles.gridCardDesc, { color: theme.textSecondary }]}>Technology should work for you, not the other way around.</Text>
             </View>
-            <View style={styles.gridCard}>
-              <View style={styles.iconContainerBlue}>
+            <View style={[styles.gridCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+              <View style={[styles.iconContainerBlue, { backgroundColor: isDarkMode ? 'rgba(37, 99, 235, 0.2)' : '#EAF2FF' }]}>
                 <Ionicons name="home-outline" size={24} color="#2563EB" />
               </View>
-              <Text style={styles.gridCardTitle}>Local-First</Text>
-              <Text style={styles.gridCardDesc}>We celebrate local businesses and the communities they serve.</Text>
+              <Text style={[styles.gridCardTitle, { color: theme.text }]}>Local-First</Text>
+              <Text style={[styles.gridCardDesc, { color: theme.textSecondary }]}>We celebrate local businesses and the communities they serve.</Text>
             </View>
-            <View style={styles.gridCard}>
-              <View style={styles.iconContainerBlue}>
+            <View style={[styles.gridCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+              <View style={[styles.iconContainerBlue, { backgroundColor: isDarkMode ? 'rgba(37, 99, 235, 0.2)' : '#EAF2FF' }]}>
                 <Ionicons name="eye-outline" size={24} color="#2563EB" />
               </View>
-              <Text style={styles.gridCardTitle}>Transparency</Text>
-              <Text style={styles.gridCardDesc}>No hidden fees. No complicated contracts.</Text>
+              <Text style={[styles.gridCardTitle, { color: theme.text }]}>Transparency</Text>
+              <Text style={[styles.gridCardDesc, { color: theme.textSecondary }]}>No hidden fees. No complicated contracts.</Text>
             </View>
-            <View style={styles.gridCard}>
-              <View style={styles.iconContainerBlue}>
+            <View style={[styles.gridCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+              <View style={[styles.iconContainerBlue, { backgroundColor: isDarkMode ? 'rgba(37, 99, 235, 0.2)' : '#EAF2FF' }]}>
                 <Ionicons name="flash-outline" size={24} color="#2563EB" />
               </View>
-              <Text style={styles.gridCardTitle}>Empowerment</Text>
-              <Text style={styles.gridCardDesc}>Give small businesses the tools that only big brands used to have.</Text>
+              <Text style={[styles.gridCardTitle, { color: theme.text }]}>Empowerment</Text>
+              <Text style={[styles.gridCardDesc, { color: theme.textSecondary }]}>Give small businesses the tools that only big brands used to have.</Text>
             </View>
           </View>
         </View>
 
         {/* 10. CONTACT SECTION */}
         <View style={styles.section}>
-          <View style={styles.contactCard}>
-            <Text style={styles.contactTitle}>Let's Grow Local Businesses Together.</Text>
-            <Text style={styles.contactDesc}>
+          <View style={[styles.contactCard, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
+            <Text style={[styles.contactTitle, { color: theme.text }]}>Let's Grow Local Businesses Together.</Text>
+            <Text style={[styles.contactDesc, { color: theme.textSecondary }]}>
               Have a question, suggestion or want to know more about REACHLO? We'd love to hear from you.
             </Text>
             
             <View style={styles.contactDetails}>
               <View style={styles.contactRow}>
                 <Ionicons name="mail" size={16} color="#2563EB" />
-                <Text style={styles.contactText}>support@reachlo.com</Text>
+                <Text style={[styles.contactText, { color: theme.text }]}>support@reachlo.com</Text>
               </View>
               <View style={styles.contactRow}>
                 <Ionicons name="globe" size={16} color="#2563EB" />
-                <Text style={styles.contactText}>www.reachlo.com</Text>
+                <Text style={[styles.contactText, { color: theme.text }]}>www.reachlo.com</Text>
               </View>
               <View style={styles.contactRow}>
                 <Ionicons name="location" size={16} color="#2563EB" />
-                <Text style={styles.contactText}>India</Text>
+                <Text style={[styles.contactText, { color: theme.text }]}>India</Text>
               </View>
             </View>
 

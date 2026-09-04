@@ -1,8 +1,8 @@
 import React, { useRef } from 'react';
 import { Pressable, Text, StyleSheet, ActivityIndicator, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import COLORS from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/typography';
+import { useTheme } from '../context/ThemeContext';
 
 export default function PrimaryButton({
   title,
@@ -10,10 +10,12 @@ export default function PrimaryButton({
   loading = false,
   disabled = false,
   variant = 'filled',
+  theme: themeVariant = 'buyer',
   style,
   textStyle,
   ...props
 }) {
+  const { theme } = useTheme();
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const isPressing = useRef(false);
 
@@ -41,7 +43,6 @@ export default function PrimaryButton({
     if (onPress) {
       onPress(e);
     }
-    // Allow pressing again after 500ms to prevent accidental double taps
     setTimeout(() => {
       isPressing.current = false;
     }, 500);
@@ -61,9 +62,13 @@ export default function PrimaryButton({
     }
   };
 
+  const getPrimaryColor = () => themeVariant === 'seller' ? theme.sellerPrimary : theme.buyerPrimary;
+  const getGradientColors = () => themeVariant === 'seller' ? [theme.sellerPrimaryLight, theme.sellerPrimary] : [theme.buyerPrimaryLight, theme.buyerPrimary];
+  const getShadowColor = () => themeVariant === 'seller' ? theme.sellerPrimary : theme.buyerPrimary;
+
   const getTextColor = () => {
-    if (variant === 'filled') return COLORS.WHITE;
-    return COLORS.PRIMARY;
+    if (variant === 'filled') return theme.textInverted || '#FFFFFF';
+    return getPrimaryColor();
   };
 
   return (
@@ -75,6 +80,8 @@ export default function PrimaryButton({
       style={({ pressed }) => [
         styles.base,
         getButtonStyle(),
+        variant === 'filled' && { shadowColor: getShadowColor() },
+        variant === 'outlined' && { borderColor: getPrimaryColor() },
         isButtonDisabled && styles.disabled,
         style,
       ]}
@@ -84,16 +91,16 @@ export default function PrimaryButton({
     >
       {variant === 'filled' ? (
         <LinearGradient
-          colors={['#1DA1F2', '#3B82F6']}
+          colors={getGradientColors()}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={[styles.contentContainer, { borderRadius: 12 }]}
         >
           <Animated.View style={[styles.innerContent, { transform: [{ scale: scaleAnim }] }]}>
             {loading ? (
-              <ActivityIndicator color={COLORS.WHITE} size="small" />
+              <ActivityIndicator color={theme.textInverted || '#FFFFFF'} size="small" />
             ) : (
-              <Text style={[styles.btnText, { color: COLORS.WHITE }, textStyle]}>
+              <Text style={[styles.btnText, { color: theme.textInverted || '#FFFFFF' }, textStyle]}>
                 {title}
               </Text>
             )}
@@ -103,7 +110,7 @@ export default function PrimaryButton({
         <Animated.View style={[styles.contentContainer, { transform: [{ scale: scaleAnim }] }]}>
           {loading ? (
             <ActivityIndicator
-              color={COLORS.PRIMARY}
+              color={getPrimaryColor()}
               size="small"
             />
           ) : (
@@ -134,7 +141,6 @@ const styles = StyleSheet.create({
   },
   filled: {
     backgroundColor: 'transparent',
-    shadowColor: '#3B82F6',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.35,
     shadowRadius: 30,
@@ -143,7 +149,6 @@ const styles = StyleSheet.create({
   outlined: {
     backgroundColor: 'transparent',
     borderWidth: 2,
-    borderColor: COLORS.PRIMARY,
   },
   textVariant: {
     backgroundColor: 'transparent',

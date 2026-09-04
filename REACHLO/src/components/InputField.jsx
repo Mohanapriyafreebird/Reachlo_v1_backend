@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Animated } from 'react-native';
 import COLORS from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS, LINE_HEIGHTS } from '../constants/typography';
+import { useTheme } from '../context/ThemeContext';
 
 const InputField = React.forwardRef(({
   label,
@@ -13,6 +14,7 @@ const InputField = React.forwardRef(({
   autoCapitalize,
   maxLength,
   editable = true,
+  theme: themeVariant = 'buyer',
   leftElement,
   secureTextEntry,
   returnKeyType,
@@ -20,6 +22,7 @@ const InputField = React.forwardRef(({
   blurOnSubmit,
   ...props
 }, ref) => {
+  const { theme } = useTheme();
   const [isFocused, setIsFocused] = useState(false);
   const focusAnim = useRef(new Animated.Value(0)).current;
 
@@ -42,24 +45,27 @@ const InputField = React.forwardRef(({
   };
 
   const borderColor = error
-    ? COLORS.ERROR
+    ? theme.error
     : focusAnim.interpolate({
         inputRange: [0, 1],
-        outputRange: [COLORS.BORDER, COLORS.BORDER_FOCUS],
+        outputRange: [
+          theme.inputBorder,
+          theme.borderFocus
+        ],
       });
 
   return (
     <View style={styles.container}>
-      {label && <Text style={styles.label}>{label}</Text>}
+      {label && <Text style={[styles.label, { color: theme.textSecondary }]}>{label}</Text>}
       <Animated.View style={[
         styles.inputContainer,
-        { borderColor },
+        { borderColor, backgroundColor: theme.inputBackground },
         !editable && styles.disabledContainer
       ]}>
         {leftElement && (
           <View style={styles.leftContainer}>
             {leftElement}
-            <View style={styles.separator} />
+            <View style={[styles.separator, { backgroundColor: theme.border }]} />
           </View>
         )}
         <TextInput
@@ -67,7 +73,7 @@ const InputField = React.forwardRef(({
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
-          placeholderTextColor={COLORS.TEXT_PLACEHOLDER}
+          placeholderTextColor={theme.inputPlaceholder}
           keyboardType={keyboardType}
           autoCapitalize={autoCapitalize}
           maxLength={maxLength}
@@ -79,14 +85,15 @@ const InputField = React.forwardRef(({
           onFocus={handleFocus}
           onBlur={handleBlur}
           style={[
-            styles.input, 
-            !editable && styles.disabledInput,
+            styles.input,
+            { color: theme.inputText },
+            !editable && { color: theme.textSecondary },
             props.multiline && { minHeight: 80, textAlignVertical: 'top', paddingTop: 14, paddingBottom: 14 }
           ]}
           {...props}
         />
       </Animated.View>
-      {error && <Text style={styles.errorText}>{error}</Text>}
+      {error && <Text style={[styles.errorText, { color: theme.error }]}>{error}</Text>}
     </View>
   );
 });
@@ -99,7 +106,6 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   label: {
-    color: COLORS.TEXT_SECONDARY,
     fontSize: FONT_SIZES.SM,
     fontWeight: FONT_WEIGHTS.MEDIUM,
     marginBottom: 6,
@@ -107,7 +113,6 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FAFAFA',
     borderWidth: 1,
     borderRadius: 24,
     paddingHorizontal: 14,
@@ -124,22 +129,16 @@ const styles = StyleSheet.create({
   separator: {
     width: 1,
     height: 20,
-    backgroundColor: COLORS.BORDER,
     marginLeft: 8,
   },
   input: {
     flex: 1,
     height: '100%',
-    color: COLORS.TEXT_PRIMARY,
     fontSize: FONT_SIZES.BASE,
     fontWeight: FONT_WEIGHTS.REGULAR,
-    padding: 0, // Reset default Android paddings
-  },
-  disabledInput: {
-    color: COLORS.TEXT_SECONDARY,
+    padding: 0,
   },
   errorText: {
-    color: COLORS.ERROR,
     fontSize: FONT_SIZES.XS,
     fontWeight: FONT_WEIGHTS.REGULAR,
     marginTop: 4,

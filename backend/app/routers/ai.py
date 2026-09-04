@@ -518,13 +518,34 @@ def publish_ai_campaign(
     # Use seller's final (possibly edited) values; fall back to AI-generated values
     campaign_description = publish_in.campaign_description or draft.campaign_description or ""
 
+    # Resolve final image URL — prefer the seller-edited value, fall back to draft
+    final_image_url = publish_in.image_url or draft.image_url
+
+    # If the image is still stored locally (Cloudinary was unavailable at generation time),
+    # try to upload it to Cloudinary now so the APK/production build can load it.
+    if final_image_url and final_image_url.startswith('/uploads/'):
+        try:
+            from app.routers.upload import upload_to_cloudinary, CLOUDINARY_CLOUD_NAME, CLOUDINARY_UPLOAD_PRESET
+            if CLOUDINARY_CLOUD_NAME and CLOUDINARY_UPLOAD_PRESET:
+                local_filepath = final_image_url.lstrip('/')
+                if os.path.exists(local_filepath):
+                    with open(local_filepath, 'rb') as _f:
+                        _file_bytes = _f.read()
+                    _file_ext = os.path.splitext(local_filepath)[1].lower() or '.jpg'
+                    _cloudinary_url = upload_to_cloudinary(_file_bytes, _file_ext)
+                    final_image_url = _cloudinary_url
+                    draft.image_url = _cloudinary_url
+                    print(f"[INFO] Re-uploaded local image to Cloudinary on publish: {_cloudinary_url}")
+        except Exception as _e:
+            print(f"[WARN] Could not re-upload local image to Cloudinary on publish: {_e}")
+
     new_campaign = Campaign(
         id=generate_uuid(),
         business_id=business.id,
         title=publish_in.title or draft.title or "Campaign",
         description=campaign_description,
         offer=publish_in.offer or draft.offer or "",
-        image_url=publish_in.image_url or draft.image_url,
+        image_url=final_image_url,
         cta_type=cta_type,
         cta_value=cta_value,
         category=business.category,

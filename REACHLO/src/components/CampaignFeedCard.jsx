@@ -21,7 +21,7 @@ export function formatCampaignEndDateShort(endDate) {
   if (!endDate) return 'No end date';
   const end = new Date(endDate);
   if (Number.isNaN(end.getTime())) return 'No end date';
-  return `Ends ${end.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+  return `${end.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`;
 }
 
 export function formatPrice(price) {
@@ -88,7 +88,6 @@ export default function CampaignFeedCard({
   const endLabel = formatCampaignEndDateShort(campaign.endDate);
   const priceLabel = formatPrice(campaign.price);
   const badge = getCampaignStatusBadge(campaign);
-  const rating = campaign.rating ?? 4.8;
   const offerText = campaign.offerLine || campaign.offer;
   const isVerified = campaign.businessVerified ?? campaign.business_verified;
 
@@ -245,11 +244,6 @@ export default function CampaignFeedCard({
               </>
             )}
 
-            {(context === 'home' || context === 'nearby') && (
-              <View style={styles.chip}>
-                <Text style={styles.chipText}>⭐ {rating.toFixed(1)}</Text>
-              </View>
-            )}
           </ScrollView>
 
           {/* Bottom Action Row */}

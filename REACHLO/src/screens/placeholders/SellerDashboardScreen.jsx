@@ -41,12 +41,14 @@ import PlacesAdjustMap from '../../components/PlacesAdjustMap';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import MapLocationPicker from '../../components/MapLocationPicker';
 import RatingModal from '../../components/RatingModal';
+import { useTheme } from '../../context/ThemeContext';
+import SellerMessagesScreen from './SellerMessagesScreen';
 
 const GOOGLE_PLACES_API_KEY = 'AIzaSyBqi9sSzxZk_uOmzlwESS0HPX5gRz9vnxo';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-// ── Error boundary to prevent MapView crash from killing the whole screen ──
+// â”€â”€ Error boundary to prevent MapView crash from killing the whole screen â”€â”€
 class MiniMapErrorBoundary extends Component {
   constructor(props) {
     super(props);
@@ -86,15 +88,15 @@ function SafeMiniMapView({ latitude, longitude }) {
         scrollEnabled={false}
         zoomEnabled={false}
       >
-        <Marker coordinate={{ latitude: lat, longitude: lng }} pinColor="#2563EB" />
+        <Marker coordinate={{ latitude: lat, longitude: lng }} pinColor="#7C3AED" />
       </MapView>
     </MiniMapErrorBoundary>
   );
 }
 
 const PREMIUM_COLORS = {
-  PRIMARY: '#2563EB',
-  SECONDARY: '#0EA5E9',
+  PRIMARY: '#7C3AED',
+  SECONDARY: '#8B5CF6',
   ACCENT: '#7C3AED',
   BACKGROUND: '#F8FAFC',
   CARD: '#FFFFFF',
@@ -141,11 +143,32 @@ function getRelativeLeadTime(value) {
   return created.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }
 
-function LeadNotificationCard({ lead, onDismiss, onCall, onWhatsApp, onView }) {
+function LeadNotificationCard({
+  lead,
+  onDismiss,
+  onCall,
+  onWhatsApp,
+  onView,
+  theme,
+  isDarkMode,
+}) {
   const translateX = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(1)).current;
   const opacity = useRef(new Animated.Value(1)).current;
+
   const isUnread = lead.status === 'NEW' && !lead.isRead;
+
+  const colors = {
+    card: isDarkMode ? '#111C31' : '#FFFFFF',
+    cardBorder: isDarkMode ? '#263653' : '#E2E8F0',
+    title: isDarkMode ? '#F8FAFC' : '#0F172A',
+    secondary: isDarkMode ? '#B7C3D7' : '#475569',
+    muted: isDarkMode ? '#8492A8' : '#94A3B8',
+    actionBg: isDarkMode ? '#17243C' : '#F8FAFC',
+    actionBorder: isDarkMode ? '#30415F' : '#E2E8F0',
+    purple: '#8B5CF6',
+    blue: '#3B82F6',
+  };
 
   const dismiss = () => {
     Animated.parallel([
@@ -164,15 +187,20 @@ function LeadNotificationCard({ lead, onDismiss, onCall, onWhatsApp, onView }) {
 
   const panResponder = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dx) > 10 && Math.abs(gesture.dy) < 12,
+      onMoveShouldSetPanResponder: (_, gesture) =>
+        Math.abs(gesture.dx) > 10 &&
+        Math.abs(gesture.dy) < 12,
+
       onPanResponderMove: (_, gesture) => {
         translateX.setValue(Math.min(gesture.dx, 0));
       },
+
       onPanResponderRelease: (_, gesture) => {
         if (gesture.dx < -90) {
           dismiss();
           return;
         }
+
         Animated.spring(translateX, {
           toValue: 0,
           tension: 80,
@@ -184,11 +212,17 @@ function LeadNotificationCard({ lead, onDismiss, onCall, onWhatsApp, onView }) {
   ).current;
 
   const handlePressIn = () => {
-    Animated.spring(scale, { toValue: 0.98, useNativeDriver: true }).start();
+    Animated.spring(scale, {
+      toValue: 0.985,
+      useNativeDriver: true,
+    }).start();
   };
 
   const handlePressOut = () => {
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start();
+    Animated.spring(scale, {
+      toValue: 1,
+      useNativeDriver: true,
+    }).start();
   };
 
   return (
@@ -198,76 +232,266 @@ function LeadNotificationCard({ lead, onDismiss, onCall, onWhatsApp, onView }) {
         styles.notificationCardWrap,
         {
           opacity,
-          transform: [{ translateX }, { scale }],
+          transform: [
+            { translateX },
+            { scale },
+          ],
         },
       ]}
     >
-      <Pressable onPress={onView} onPressIn={handlePressIn} onPressOut={handlePressOut}>
-        <BlurView intensity={38} tint="light" style={styles.notificationCard}>
+      <Pressable
+        onPress={onView}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+      >
+        <View
+          style={[
+            styles.notificationCard,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.cardBorder,
+              shadowColor: isDarkMode ? '#000000' : '#64748B',
+              shadowOpacity: isDarkMode ? 0.3 : 0.08,
+            },
+          ]}
+        >
+          {/* TOP ROW */}
           <View style={styles.notificationTopRow}>
-            <LinearGradient colors={['#56CCF2', '#2F80ED']} style={styles.buyerAvatar}>
-              <Text style={styles.buyerAvatarText}>{getLeadInitials(lead.name)}</Text>
+
+            <LinearGradient
+              colors={
+                isDarkMode
+                  ? ['#8B5CF6', '#4F46E5']
+                  : ['#56CCF2', '#2F80ED']
+              }
+              style={styles.buyerAvatar}
+            >
+              <Text style={styles.buyerAvatarText}>
+                {getLeadInitials(lead.name)}
+              </Text>
             </LinearGradient>
 
             <View style={styles.notificationInfo}>
+
               <View style={styles.notificationNameRow}>
-                <Text style={styles.notificationName} numberOfLines={1}>{lead.name}</Text>
-                <View style={styles.newLeadBadge}>
-                  {isUnread ? <View style={styles.newLeadDot} /> : <Ionicons name="checkmark-circle" size={12} color="#2563EB" />}
-                  <Text style={[styles.newLeadBadgeText, !isUnread && styles.newLeadBadgeReadText]}>
+
+                <Text
+                  style={[
+                    styles.notificationName,
+                    { color: colors.title },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {lead.name}
+                </Text>
+
+                <View
+                  style={[
+                    styles.newLeadBadge,
+                    {
+                      backgroundColor: isUnread
+                        ? isDarkMode
+                          ? 'rgba(34,197,94,0.16)'
+                          : '#ECFDF5'
+                        : isDarkMode
+                          ? '#202C43'
+                          : '#F1F5F9',
+
+                      borderColor: isUnread
+                        ? isDarkMode
+                          ? 'rgba(34,197,94,0.35)'
+                          : '#BBF7D0'
+                        : isDarkMode
+                          ? '#35445F'
+                          : '#E2E8F0',
+                    },
+                  ]}
+                >
+                  {isUnread ? (
+                    <View style={styles.newLeadDot} />
+                  ) : (
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={13}
+                      color={isDarkMode ? '#94A3B8' : '#7C3AED'}
+                    />
+                  )}
+
+                  <Text
+                    style={[
+                      styles.newLeadBadgeText,
+                      {
+                        color: isUnread
+                          ? '#22C55E'
+                          : isDarkMode
+                            ? '#AAB7CB'
+                            : '#64748B',
+                      },
+                    ]}
+                  >
                     {isUnread ? 'NEW' : 'READ'}
                   </Text>
                 </View>
               </View>
 
+              {/* PHONE */}
               <View style={styles.notificationMetaRow}>
-                <Ionicons name="call-outline" size={13} color="#2563EB" />
-                <Text style={styles.notificationMetaText}>{lead.phone}</Text>
+                <Ionicons
+                  name="call-outline"
+                  size={13}
+                  color={isDarkMode ? '#A78BFA' : '#7C3AED'}
+                />
+
+                <Text
+                  style={[
+                    styles.notificationMetaText,
+                    { color: colors.secondary },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {lead.phone}
+                </Text>
               </View>
+
+              {/* CAMPAIGN */}
               <View style={styles.notificationMetaRow}>
-                <Ionicons name="pricetag-outline" size={13} color="#2563EB" />
-                <Text style={styles.notificationMetaText} numberOfLines={1}>
+                <Ionicons
+                  name="pricetag-outline"
+                  size={13}
+                  color={isDarkMode ? '#A78BFA' : '#7C3AED'}
+                />
+
+                <Text
+                  style={[
+                    styles.notificationMetaText,
+                    { color: colors.secondary },
+                  ]}
+                  numberOfLines={1}
+                >
                   {lead.campaignTitle || 'Campaign offer'}
                 </Text>
               </View>
+
             </View>
 
-            <Text style={styles.notificationTime}>{getRelativeLeadTime(lead.createdAt)}</Text>
+            <Text
+              style={[
+                styles.notificationTime,
+                { color: colors.muted },
+              ]}
+            >
+              {getRelativeLeadTime(lead.createdAt)}
+            </Text>
+
           </View>
 
+          {/* ACTION BUTTONS */}
           <View style={styles.notificationActions}>
-            <Pressable style={styles.notificationActionBtn} onPress={onCall}>
-              <Ionicons name="call" size={16} color="#2563EB" />
-              <Text style={styles.notificationActionText}>Call</Text>
+
+            <Pressable
+              style={[
+                styles.notificationActionBtn,
+                {
+                  backgroundColor: colors.actionBg,
+                  borderColor: colors.actionBorder,
+                },
+              ]}
+              onPress={onCall}
+            >
+              <Ionicons
+                name="call"
+                size={16}
+                color={isDarkMode ? '#A78BFA' : '#7C3AED'}
+              />
+
+              <Text
+                style={[
+                  styles.notificationActionText,
+                  {
+                    color: isDarkMode ? '#DDD6FE' : '#1E3A8A',
+                  },
+                ]}
+              >
+                Call
+              </Text>
             </Pressable>
-            <Pressable style={styles.notificationActionBtn} onPress={onWhatsApp}>
-              <Ionicons name="chatbubble-ellipses-outline" size={16} color="#3B82F6" />
-              <Text style={styles.notificationActionText}>Chat</Text>
+
+            <Pressable
+              style={[
+                styles.notificationActionBtn,
+                {
+                  backgroundColor: colors.actionBg,
+                  borderColor: colors.actionBorder,
+                },
+              ]}
+              onPress={onWhatsApp}
+            >
+              <Ionicons
+                name="chatbubble-ellipses-outline"
+                size={16}
+                color={isDarkMode ? '#67E8F9' : '#2563EB'}
+              />
+
+              <Text
+                style={[
+                  styles.notificationActionText,
+                  {
+                    color: isDarkMode ? '#BAE6FD' : '#1E3A8A',
+                  },
+                ]}
+              >
+                Chat
+              </Text>
             </Pressable>
-            <Pressable style={styles.notificationActionBtn} onPress={onView}>
-              <Ionicons name="eye-outline" size={16} color="#2563EB" />
-              <Text style={styles.notificationActionText}>Details</Text>
+
+            <Pressable
+              style={[
+                styles.notificationActionBtn,
+                {
+                  backgroundColor: colors.actionBg,
+                  borderColor: colors.actionBorder,
+                },
+              ]}
+              onPress={onView}
+            >
+              <Ionicons
+                name="eye-outline"
+                size={16}
+                color={isDarkMode ? '#A78BFA' : '#7C3AED'}
+              />
+
+              <Text
+                style={[
+                  styles.notificationActionText,
+                  {
+                    color: isDarkMode ? '#DDD6FE' : '#1E3A8A',
+                  },
+                ]}
+              >
+                Details
+              </Text>
             </Pressable>
+
           </View>
-        </BlurView>
+        </View>
       </Pressable>
     </Animated.View>
   );
 }
- 
- // All major Indian cities
+
+// All major Indian cities
 const ALL_INDIA_CITIES = [
-  'Agra','Ahmedabad','Aizawl','Ajmer','Akola','Aligarh','Allahabad','Alwar','Amaravati','Amravati',
-  'Amritsar','Anantapur','Asansol','Aurangabad','Bangalore','Bareilly','Belgaum','Bhilai','Bhopal',
-  'Bhubaneswar','Bikaner','Chandigarh','Chennai','Coimbatore','Cuttack','Davanagere','Dehradun',
-  'Delhi','Dhanbad','Durg','Erode','Faridabad','Firozabad','Ghaziabad','Gorakhpur','Guntur','Gurgaon',
-  'Guwahati','Gwalior','Hubli','Hyderabad','Imphal','Indore','Itanagar','Jaipur','Jalandhar','Jammu',
-  'Jamnagar','Jamshedpur','Jhansi','Jodhpur','Kakinada','Kochi','Kohima','Kolhapur','Kolkata','Kota',
-  'Kozhikode','Ludhiana','Lucknow','Madurai','Mangalore','Meerut','Mumbai','Mysore','Nagpur','Nashik',
-  'Nellore','Noida','Panaji','Patna','Pondicherry','Pune','Raipur','Rajkot','Ranchi','Rourkela',
-  'Salem','Shillong','Shimla','Siliguri','Solapur','Srinagar','Surat','Thane','Thiruvananthapuram',
-  'Tirunelveli','Tirupati','Udaipur','Ujjain','Vadodara','Varanasi','Vijayawada','Visakhapatnam',
-  'Warangal','Rajkot','Tiruchirapalli','Hubli-Dharwad','Bhiwandi','Saharanpur','Gorakhpur','Guntur'
+  'Agra', 'Ahmedabad', 'Aizawl', 'Ajmer', 'Akola', 'Aligarh', 'Allahabad', 'Alwar', 'Amaravati', 'Amravati',
+  'Amritsar', 'Anantapur', 'Asansol', 'Aurangabad', 'Bangalore', 'Bareilly', 'Belgaum', 'Bhilai', 'Bhopal',
+  'Bhubaneswar', 'Bikaner', 'Chandigarh', 'Chennai', 'Coimbatore', 'Cuttack', 'Davanagere', 'Dehradun',
+  'Delhi', 'Dhanbad', 'Durg', 'Erode', 'Faridabad', 'Firozabad', 'Ghaziabad', 'Gorakhpur', 'Guntur', 'Gurgaon',
+  'Guwahati', 'Gwalior', 'Hubli', 'Hyderabad', 'Imphal', 'Indore', 'Itanagar', 'Jaipur', 'Jalandhar', 'Jammu',
+  'Jamnagar', 'Jamshedpur', 'Jhansi', 'Jodhpur', 'Kakinada', 'Kochi', 'Kohima', 'Kolhapur', 'Kolkata', 'Kota',
+  'Kozhikode', 'Ludhiana', 'Lucknow', 'Madurai', 'Mangalore', 'Meerut', 'Mumbai', 'Mysore', 'Nagpur', 'Nashik',
+  'Nellore', 'Noida', 'Panaji', 'Patna', 'Pondicherry', 'Pune', 'Raipur', 'Rajkot', 'Ranchi', 'Rourkela',
+  'Salem', 'Shillong', 'Shimla', 'Siliguri', 'Solapur', 'Srinagar', 'Surat', 'Thane', 'Thiruvananthapuram',
+  'Tirunelveli', 'Tirupati', 'Udaipur', 'Ujjain', 'Vadodara', 'Varanasi', 'Vijayawada', 'Visakhapatnam',
+  'Warangal', 'Rajkot', 'Tiruchirapalli', 'Hubli-Dharwad', 'Bhiwandi', 'Saharanpur', 'Gorakhpur', 'Guntur'
 ].sort();
 
 export const getLeadStatus = (lead) => {
@@ -281,10 +505,10 @@ export const getLeadStatus = (lead) => {
   const now = new Date().getTime();
   const buyerTime = thread.last_buyer_message_at ? new Date(thread.last_buyer_message_at).getTime() : 0;
   const sellerTime = thread.last_seller_reply_at ? new Date(thread.last_seller_reply_at).getTime() : 0;
-  
+
   const latestActivity = Math.max(buyerTime, sellerTime);
   const inactiveHours = (now - latestActivity) / (1000 * 60 * 60);
-  
+
   let sellerMissedResponse = false;
   if (buyerTime > sellerTime) {
     const hoursSinceBuyerMsg = (now - buyerTime) / (1000 * 60 * 60);
@@ -305,59 +529,59 @@ const formatLeadDate = (dateString) => {
   const d = new Date(dateString);
   const day = d.getDate();
   const month = d.toLocaleString('default', { month: 'short' });
-  return `📅 ${day} ${month}`;
+  return `${day} ${month}`;
 };
 
-function CRMLeadCard({ lead, onCall, onWhatsApp }) {
+function CRMLeadCard({ lead, onCall, onWhatsApp, theme, isDarkMode }) {
   const initials = getLeadInitials(lead.name);
   const calculatedStatus = getLeadStatus(lead);
-  
+
   const getAccentColor = (status) => {
     switch (status) {
-      case 'NEW': return '#3B82F6';
+      case 'NEW': return '#8B5CF6';
       case 'ACTIVE': return '#14B8A6'; // Teal
       case 'CONTACTED': return '#8B5CF6'; // Indigo/Violet
       case 'CLOSED': return '#94A3B8';
-      default: return '#3B82F6';
+      default: return '#8B5CF6';
     }
   };
 
   const getAvatarGradient = (status) => {
     switch (status) {
-      case 'NEW': return ['#60A5FA', '#4F46E5'];
+      case 'NEW': return ['#8B5CF6', '#4F46E5'];
       case 'ACTIVE': return ['#34D399', '#059669']; // Green/Teal
       case 'CONTACTED': return ['#A78BFA', '#6366F1'];
       case 'CLOSED': return ['#94A3B8', '#64748B'];
-      default: return ['#60A5FA', '#4F46E5'];
+      default: return ['#8B5CF6', '#4F46E5'];
     }
   };
 
   const getStatusBadge = (status) => {
     switch (status) {
-      case 'NEW': return { bg: 'rgba(59, 130, 246, 0.12)', text: '#3B82F6' };
+      case 'NEW': return { bg: 'rgba(139, 92, 246, 0.12)', text: '#8B5CF6' };
       case 'ACTIVE': return { bg: 'rgba(20, 184, 166, 0.12)', text: '#14B8A6' };
       case 'CONTACTED': return { bg: 'rgba(139, 92, 246, 0.12)', text: '#8B5CF6' };
       case 'CLOSED': return { bg: 'rgba(148, 163, 184, 0.12)', text: '#64748B' };
       default: return { bg: 'rgba(148, 163, 184, 0.12)', text: '#64748B' };
     }
   };
-  
+
   const accentColor = getAccentColor(calculatedStatus);
   const avatarColors = getAvatarGradient(calculatedStatus);
   const badgeColors = getStatusBadge(calculatedStatus);
 
   return (
-    <View style={[styles.crmCard, { borderLeftColor: accentColor }]}>
+    <View style={[styles.crmCard, { borderLeftColor: accentColor, backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
       <View style={styles.crmCardHeader}>
         <View style={styles.crmCardLeft}>
           <LinearGradient colors={avatarColors} style={styles.crmAvatar}>
             <Text style={styles.crmAvatarText}>{initials}</Text>
           </LinearGradient>
           <View>
-            <Text style={styles.crmBuyerName}>{lead.name}</Text>
+            <Text style={[styles.crmBuyerName, { color: theme.text }]}>{lead.name}</Text>
             <View style={styles.crmPhoneRow}>
-              <Ionicons name="call-outline" size={12} color="#94A3B8" />
-              <Text style={styles.crmBuyerPhone}>{lead.phone}</Text>
+              <Ionicons name="call-outline" size={12} color={theme.textTertiary} />
+              <Text style={[styles.crmBuyerPhone, { color: theme.textSecondary }]}>{lead.phone}</Text>
             </View>
           </View>
         </View>
@@ -365,12 +589,13 @@ function CRMLeadCard({ lead, onCall, onWhatsApp }) {
           <Text style={[styles.crmBadgeText, { color: badgeColors.text }]}>{calculatedStatus}</Text>
         </View>
       </View>
-      
-      <View style={styles.crmCardDivider} />
-      
+
+      <View style={[styles.crmCardDivider, { backgroundColor: theme.border }]} />
+
       <View style={styles.crmCardFooter}>
-        <View style={styles.crmDateRow}>
-          <Text style={[styles.crmDate, { color: '#475569' }]}>{formatLeadDate(lead.createdAt)}</Text>
+        <View style={[styles.crmDateRow, { flexDirection: 'row', alignItems: 'center' }]}>
+          <Ionicons name="calendar-outline" size={14} color={theme.textTertiary} style={{ marginRight: 4 }} />
+          <Text style={[styles.crmDate, { color: theme.textSecondary }]}>{formatLeadDate(lead.createdAt)}</Text>
         </View>
         <View style={styles.crmActions}>
           <Pressable style={[styles.crmActionBtn, { borderColor: accentColor + '60' }]} onPress={onCall}>
@@ -384,22 +609,23 @@ function CRMLeadCard({ lead, onCall, onWhatsApp }) {
         </View>
       </View>
     </View>
+
   );
 }
 
-function CRMLeadsModal({ visible, onClose, campaign, dismissedLeadIds, onCall, onWhatsApp, markAllRead }) {
+function CRMLeadsModal({ visible, onClose, campaign, dismissedLeadIds, onCall, onWhatsApp, markAllRead, theme, isDarkMode }) {
   const [filter, setFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchActive, setIsSearchActive] = useState(false);
-  
+
   if (!campaign) return null;
-  
+
   const leads = campaign.leads || [];
   const filters = ['All', 'New', 'Active', 'Contacted', 'Closed'];
-  
+
   const filteredLeads = leads.filter(lead => {
     if (dismissedLeadIds && dismissedLeadIds.includes(lead.id)) return false;
-    
+
     // Status Filter
     const calcStatus = getLeadStatus(lead);
     if (filter !== 'All') {
@@ -408,7 +634,7 @@ function CRMLeadsModal({ visible, onClose, campaign, dismissedLeadIds, onCall, o
       if (filter === 'Contacted' && calcStatus !== 'CONTACTED') return false;
       if (filter === 'Closed' && calcStatus !== 'CLOSED') return false;
     }
-    
+
     // Search Filter
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -417,56 +643,57 @@ function CRMLeadsModal({ visible, onClose, campaign, dismissedLeadIds, onCall, o
       const c = (lead.campaignTitle || campaign.title || '').toLowerCase();
       if (!n.includes(q) && !p.includes(q) && !c.includes(q)) return false;
     }
-    
+
     return true;
+
   });
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <LinearGradient colors={['#FFFFFF', '#F1F5F9', '#E2E8F0']} style={styles.crmContainer}>
+      <LinearGradient colors={isDarkMode ? [theme.background, theme.surface, theme.background] : ['#FFFFFF', '#F1F5F9', '#E2E8F0']} style={styles.crmContainer}>
         <SafeAreaView style={{ flex: 1 }}>
           {/* Header */}
-          <View style={styles.crmHeader}>
+          <View style={[styles.crmHeader, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
             <Pressable onPress={onClose} style={styles.crmBackBtn} hitSlop={12}>
-              <Ionicons name="arrow-back" size={24} color="#0F172A" />
+              <Ionicons name="arrow-back" size={24} color={theme.text} />
             </Pressable>
             {isSearchActive ? (
               <View style={[styles.crmHeaderTitles, { flexDirection: 'row', alignItems: 'center' }]}>
                 <TextInput
-                  style={{ flex: 1, fontSize: 16, color: '#0F172A', paddingVertical: 4, paddingHorizontal: 8, backgroundColor: '#F1F5F9', borderRadius: 8, marginRight: 8 }}
+                  style={{ flex: 1, fontSize: 16, color: theme.text, paddingVertical: 4, paddingHorizontal: 8, backgroundColor: theme.cardBackground, borderRadius: 8, marginRight: 8, borderColor: theme.border, borderWidth: 1 }}
                   placeholder="Search leads..."
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={theme.textTertiary}
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                   autoFocus
                 />
                 <Pressable onPress={() => { setIsSearchActive(false); setSearchQuery(''); }} hitSlop={12}>
-                  <Ionicons name="close" size={22} color="#64748B" />
+                  <Ionicons name="close" size={22} color={theme.textSecondary} />
                 </Pressable>
               </View>
             ) : (
               <>
                 <View style={styles.crmHeaderTitles}>
-                  <Text style={styles.crmHeaderTitle}>View Leads</Text>
-                  <Text style={styles.crmHeaderSubtitle} numberOfLines={1}>{campaign.title}</Text>
+                  <Text style={[styles.crmHeaderTitle, { color: theme.text }]}>View Leads</Text>
+                  <Text style={[styles.crmHeaderSubtitle, { color: theme.textSecondary }]} numberOfLines={1}>{campaign.title}</Text>
                 </View>
                 <Pressable style={styles.crmSearchBtn} hitSlop={12} onPress={() => setIsSearchActive(true)}>
-                  <Ionicons name="search" size={22} color="#0F172A" />
+                  <Ionicons name="search" size={22} color={theme.text} />
                 </Pressable>
               </>
             )}
           </View>
 
           {/* Filter Chips */}
-          <View style={styles.crmFilterWrapper}>
+          <View style={[styles.crmFilterWrapper, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.crmFilterContainer}>
               {filters.map(f => (
-                <Pressable 
-                  key={f} 
-                  style={[styles.crmFilterChip, filter === f && styles.crmFilterChipActive]}
+                <Pressable
+                  key={f}
+                  style={[styles.crmFilterChip, { backgroundColor: theme.cardBackground, borderColor: theme.border }, filter === f && styles.crmFilterChipActive]}
                   onPress={() => setFilter(f)}
                 >
-                  <Text style={[styles.crmFilterText, filter === f && styles.crmFilterTextActive]}>{f}</Text>
+                  <Text style={[styles.crmFilterText, { color: theme.textSecondary }, filter === f && styles.crmFilterTextActive]}>{f}</Text>
                 </Pressable>
               ))}
             </ScrollView>
@@ -479,26 +706,28 @@ function CRMLeadsModal({ visible, onClose, campaign, dismissedLeadIds, onCall, o
             contentContainerStyle={styles.crmListContainer}
             showsVerticalScrollIndicator={false}
             renderItem={({ item: lead }) => (
-              <CRMLeadCard 
-                lead={{...lead, campaignTitle: lead.campaignTitle || campaign.title}} 
-                onCall={() => onCall(lead)} 
-                onWhatsApp={() => onWhatsApp({ ...lead, campaignTitle: lead.campaignTitle || campaign.title })} 
+              <CRMLeadCard
+                lead={{ ...lead, campaignTitle: lead.campaignTitle || campaign.title }}
+                onCall={() => onCall(lead)}
+                onWhatsApp={() => onWhatsApp({ ...lead, campaignTitle: lead.campaignTitle || campaign.title })}
+                theme={theme}
+                isDarkMode={isDarkMode}
               />
             )}
             ListEmptyComponent={
               <View style={styles.crmEmpty}>
-                <Ionicons name="inbox-outline" size={48} color="#CBD5E1" />
-                <Text style={styles.crmEmptyText}>No {filter !== 'All' ? filter : ''} leads are currently matching this view.</Text>
+                <Ionicons name="inbox-outline" size={48} color={theme.textTertiary} />
+                <Text style={[styles.crmEmptyText, { color: theme.textSecondary }]}>No {filter !== 'All' ? filter : ''} leads are currently matching this view.</Text>
               </View>
             }
           />
-          
+
           {leads.length > 0 && (
             <View style={styles.crmFloatingFooter}>
               <BlurView intensity={40} tint="light" style={styles.crmMarkReadBtn}>
                 <Pressable onPress={() => markAllRead(leads)} style={styles.crmMarkReadPressable}>
-                   <Ionicons name="checkmark" size={16} color="#2563EB" style={{ marginRight: 6 }} />
-                   <Text style={styles.crmMarkReadText}>Mark all as Read</Text>
+                  <Ionicons name="checkmark" size={16} color="#7C3AED" style={{ marginRight: 6 }} />
+                  <Text style={styles.crmMarkReadText}>Mark all as Read</Text>
                 </Pressable>
               </BlurView>
             </View>
@@ -506,13 +735,15 @@ function CRMLeadsModal({ visible, onClose, campaign, dismissedLeadIds, onCall, o
         </SafeAreaView>
       </LinearGradient>
     </Modal>
+
   );
 }
 
 export default function SellerDashboardScreen({ navigation }) {
   const { user, logout, updateUserProfile } = useAuth();
-  
+
   // Navigation State: 'Home' | 'Campaigns' | 'Profile'
+  const { theme, isDarkMode, toggleDarkMode } = useTheme();
   const [activeTab, setActiveTab] = useState('Home');
 
   // Animation values
@@ -579,6 +810,9 @@ export default function SellerDashboardScreen({ navigation }) {
       const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(text)}&key=${GOOGLE_PLACES_API_KEY}&sessiontoken=${locationSessionToken.current}&components=country:in&language=en`;
       const res = await fetch(url);
       const data = await res.json();
+      if (data.status && data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+        console.warn('Location autocomplete API error:', data.status, data.error_message);
+      }
       setLocationSuggestions(data.predictions || []);
     } catch (e) {
       console.warn('Location autocomplete error:', e);
@@ -596,6 +830,9 @@ export default function SellerDashboardScreen({ navigation }) {
       const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=geometry,formatted_address&key=${GOOGLE_PLACES_API_KEY}&sessiontoken=${token}`;
       const res = await fetch(url);
       const data = await res.json();
+      if (data.status && data.status !== 'OK') {
+        console.warn('Location details API error:', data.status, data.error_message);
+      }
       const result = data.result;
       if (result?.geometry) {
         const latitude = result.geometry.location.lat;
@@ -687,42 +924,75 @@ export default function SellerDashboardScreen({ navigation }) {
       const fetchedCampaigns = await apiService.get('/campaigns?seller_mode=true');
       const fetchedLeads = await apiService.get('/leads');
       const threads = await chatService.getThreads();
-      
+
       const mappedCampaigns = fetchedCampaigns
         .filter(camp => camp.image_url)
         .map(camp => ({
-        ...camp,
-        offerLine: camp.offer,
-        startDate: camp.start_date ? camp.start_date.split('T')[0] : '',
-        endDate: camp.end_date ? camp.end_date.split('T')[0] : '',
-        price: camp.price ?? 0,
-        imageUrl: resolveMediaUrl(camp.image_url),
-        image_urls: camp.image_urls || (camp.image_url ? [camp.image_url] : []),
-        views: camp.view_count,
-        leadsCount: camp.lead_count,
-        leads: fetchedLeads.filter(l => l.campaign_id === camp.id).map(l => {
-          const thread = threads.find(t => t.lead_id === l.id);
-          return {
-            id: l.id,
-            name: l.name,
-            phone: l.phone,
-            status: l.label,
-            message: l.message,
-            isRead: l.is_read,
-            createdAt: l.created_at,
-            campaignTitle: l.campaign_title || camp.title,
-            thread: thread || null,
-          };
-        }),
-        businessName: camp.business_name || user?.name || 'Your Business',
-        businessVerified: camp.business_verified ?? user?.verified ?? false,
-      }));
+          ...camp,
+          offerLine: camp.offer,
+          startDate: camp.start_date ? camp.start_date.split('T')[0] : '',
+          endDate: camp.end_date ? camp.end_date.split('T')[0] : '',
+          price: camp.price ?? 0,
+          imageUrl: resolveMediaUrl(camp.image_url),
+          image_urls: camp.image_urls || (camp.image_url ? [camp.image_url] : []),
+          views: camp.view_count,
+          leadsCount: camp.lead_count,
+          locationAddress: camp.location_address || camp.locationAddress || '',
+          latitude: camp.latitude ?? null,
+          longitude: camp.longitude ?? null,
+          google_place_id: camp.google_place_id || camp.googlePlaceId || null,
+          leads: fetchedLeads.filter(l => l.campaign_id === camp.id).map(l => {
+            const thread = threads.find(t => t.lead_id === l.id);
+            return {
+              id: l.id,
+              name: l.name,
+              phone: l.phone,
+              status: l.label,
+              message: l.message,
+              isRead: l.is_read,
+              createdAt: l.created_at,
+              campaignTitle: l.campaign_title || camp.title,
+              thread: thread || null,
+            };
+          }),
+          businessName: camp.business_name || user?.name || 'Your Business',
+          businessVerified: camp.business_verified ?? user?.verified ?? false,
+        }));
       setCampaigns(mappedCampaigns);
     } catch (error) {
       console.error("Failed to load dashboard data:", error);
+      // Fallback to dummy data for now
+      const mockCampaign = {
+        id: 'mock-1',
+        title: 'Push Your Limits (Mock)',
+        image_url: 'https://via.placeholder.com/600x400/9333EA/FFFFFF?text=Push+Your+Limits',
+        image_urls: ['https://via.placeholder.com/600x400/9333EA/FFFFFF?text=Push+Your+Limits'],
+        imageUrl: 'https://via.placeholder.com/600x400/9333EA/FFFFFF?text=Push+Your+Limits',
+        offerLine: 'Join today and get 50% OFF on your first month',
+        start_date: new Date().toISOString(),
+        end_date: new Date(Date.now() + 864000000).toISOString(),
+        startDate: new Date().toISOString().split('T')[0],
+        endDate: new Date(Date.now() + 864000000).toISOString().split('T')[0],
+        price: 2000,
+        view_count: 15,
+        views: 15,
+        lead_count: 4,
+        leadsCount: 4,
+        businessName: 'EASY FIT Unisex Fitness Centre',
+        business_verified: true,
+        businessVerified: true,
+        leads: [
+          { id: 'l1', name: 'Hasini', phone: '7893750665', status: 'NEW', createdAt: new Date().toISOString() },
+          { id: 'l2', name: 'Samantha', phone: '9846746191', status: 'NEW', createdAt: new Date(Date.now() - 864000000).toISOString() },
+          { id: 'l3', name: 'Mayon', phone: '9597733035', status: 'CONTACTED', createdAt: new Date(Date.now() - 1728000000).toISOString() },
+          { id: 'l4', name: 'Swetha', phone: '6363452739', status: 'NEW', createdAt: new Date(Date.now() - 2592000000).toISOString() },
+        ]
+      };
+      setCampaigns([mockCampaign]);
     } finally {
       setLoadingData(false);
     }
+
   };
 
   useFocusEffect(
@@ -731,7 +1001,7 @@ export default function SellerDashboardScreen({ navigation }) {
     }, [])
   );
 
-  // ── New Message Notification (10-second popup on login) ─────────────────
+  // â”€â”€ New Message Notification (10-second popup on login) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [sellerMsgNotifVisible, setSellerMsgNotifVisible] = useState(false);
   const [sellerMsgNotifCount, setSellerMsgNotifCount] = useState(0);
   const sellerMsgNotifAnim = useRef(new Animated.Value(0)).current;
@@ -770,7 +1040,7 @@ export default function SellerDashboardScreen({ navigation }) {
       if (sellerMsgNotifTimer.current) clearTimeout(sellerMsgNotifTimer.current);
     };
   }, [user?.email]);
-  // ────────────────────────────────────────────────────────────────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   useEffect(() => {
     const loadBusiness = async () => {
@@ -785,19 +1055,20 @@ export default function SellerDashboardScreen({ navigation }) {
     loadBusiness();
   }, []);
 
-
   // Derived states for campaigns and leads
   const todayDate = new Date().toISOString().split('T')[0];
   const liveCampaigns = campaigns.filter(c => (!c.endDate || c.endDate >= todayDate) && c.status !== 'DELETED');
   const pastCampaigns = campaigns.filter(c => (c.endDate && c.endDate < todayDate) || c.status === 'DELETED');
-  
+
   const totalViews = liveCampaigns.reduce((sum, camp) => sum + (camp.views || 0), 0);
   const totalLeads = liveCampaigns.reduce((sum, camp) => sum + (camp.leadsCount || 0), 0);
   const activeCount = liveCampaigns.length;
-  
+
   const sortedLiveCampaigns = [...liveCampaigns].sort((a, b) => {
-    if (liveSortBy === 'views') return b.views - a.views;
-    return b.leadsCount - a.leadsCount;
+    if (liveSortBy === 'views') return (b.views || 0) - (a.views || 0);
+    const aLeads = a.leads?.length ?? a.leadsCount ?? 0;
+    const bLeads = b.leads?.length ?? b.leadsCount ?? 0;
+    return bLeads - aLeads;
   });
 
   const allNewLeads = campaigns
@@ -822,13 +1093,13 @@ export default function SellerDashboardScreen({ navigation }) {
       const threads = await chatService.getThreads();
       let thread = threads.find(t => t.lead_id === lead.id);
       if (!thread) {
-         // Should not happen for seller usually, but just in case
-         thread = await chatService.createThread(lead.id);
+        // Should not happen for seller usually, but just in case
+        thread = await chatService.createThread(lead.id);
       }
       const campaign = campaigns.find(c => c.id === lead.campaign_id) || { title: lead.campaignTitle };
-      navigation.navigate('ChatScreen', { 
-        threadId: thread.id, 
-        campaign: campaign, 
+      navigation.navigate('ChatScreen', {
+        threadId: thread.id,
+        campaign: campaign,
         // Pass buyer info so ChatScreen header shows actual buyer name (not fallback "Buyer")
         buyer: { name: lead.name, phone: lead.phone },
       });
@@ -848,7 +1119,7 @@ export default function SellerDashboardScreen({ navigation }) {
   const markLeadListAsRead = async (leads = []) => {
     const unreadLeads = leads.filter(lead => !lead.isRead || (lead.thread && lead.thread.seller_unread_count > 0));
     if (unreadLeads.length === 0) return;
-    
+
     // Optimistic local update
     setCampaigns(prev => prev.map(camp => ({
       ...camp,
@@ -869,6 +1140,7 @@ export default function SellerDashboardScreen({ navigation }) {
     } catch (error) {
       console.error('Failed to mark leads as read:', error);
     }
+
   };
 
   // Profile Form State
@@ -970,7 +1242,7 @@ export default function SellerDashboardScreen({ navigation }) {
     setCampTitle(camp.title);
     setCampDesc(camp.description);
     setCampOfferLine(camp.offerLine || '');
-    
+
     const cat = camp.category || '';
     if (cat.includes('::')) {
       const parts = cat.split('::');
@@ -980,7 +1252,7 @@ export default function SellerDashboardScreen({ navigation }) {
       setCampCategory(cat || CATEGORIES[0]);
       setCampSubCategory(CATEGORY_MAP[cat || CATEGORIES[0]]?.[0] || '');
     }
-    
+
     let cities = [];
     if (camp.target_cities) {
       try {
@@ -1010,11 +1282,15 @@ export default function SellerDashboardScreen({ navigation }) {
       serverUrl: url,
       isLocal: false,
     })));
-    setLocationAddress(camp.locationAddress || '');
-    setLocationLat(camp.latitude ?? null);
-    setLocationLon(camp.longitude ?? null);
+    const existingLocationAddress = camp.locationAddress || camp.location_address || '';
+    const existingLatitude = camp.latitude ?? camp.location_latitude ?? null;
+    const existingLongitude = camp.longitude ?? camp.location_longitude ?? null;
+
+    setLocationAddress(existingLocationAddress);
+    setLocationLat(existingLatitude);
+    setLocationLon(existingLongitude);
     setLocationPlaceId(camp.google_place_id || null);
-    setLocationSelected(Boolean(camp.locationAddress || camp.latitude || camp.longitude));
+    setLocationSelected(Boolean(existingLocationAddress || existingLatitude || existingLongitude));
     setLocationPickerVisible(false);
     setAutocompleteModalVisible(false);
     setAdjustModalVisible(false);
@@ -1023,6 +1299,7 @@ export default function SellerDashboardScreen({ navigation }) {
     setShowSuccess(false);
     successScaleAnim.setValue(0);
     setCampaignModalVisible(true);
+
   };
 
   const validateStep1 = () => {
@@ -1096,12 +1373,12 @@ export default function SellerDashboardScreen({ navigation }) {
       setIsSmartCropping(true);
       try {
         if (mediaType === 'videos' || asset.type === 'video') {
-           setImageReview({
+          setImageReview({
             uri: asset.uri,
             meta: { fileName: asset.fileName || 'video.mp4', mimeType: asset.mimeType || 'video/mp4' },
             sourceUri: asset.uri,
             isVideo: true
-           });
+          });
         } else {
           const cropped = await smartCenterCrop(asset.uri);
           setImageReview({
@@ -1117,13 +1394,13 @@ export default function SellerDashboardScreen({ navigation }) {
         console.warn('Media processing failed:', err);
         // Fallback for image
         if (mediaType !== 'videos' && asset.type !== 'video') {
-           setImageReview({
-              uri: asset.uri,
-              meta: { fileName: asset.fileName || 'image.jpg', mimeType: asset.mimeType || 'image/jpeg' },
-              sourceUri: asset.uri,
-           });
+          setImageReview({
+            uri: asset.uri,
+            meta: { fileName: asset.fileName || 'image.jpg', mimeType: asset.mimeType || 'image/jpeg' },
+            sourceUri: asset.uri,
+          });
         } else {
-           Alert.alert('Error', 'Could not process media. Please try again.');
+          Alert.alert('Error', 'Could not process media. Please try again.');
         }
       } finally {
         setIsSmartCropping(false);
@@ -1148,6 +1425,7 @@ export default function SellerDashboardScreen({ navigation }) {
       ],
       { cancelable: true }
     );
+
   };
 
   const confirmImageReview = () => {
@@ -1204,6 +1482,7 @@ export default function SellerDashboardScreen({ navigation }) {
     setCropModalVisible(false);
     setPendingCropUri(null);
     setEditingImageIndex(null);
+
   };
 
   const removeCampImage = (index) => {
@@ -1241,11 +1520,11 @@ export default function SellerDashboardScreen({ navigation }) {
         }
         const fileName = img.meta?.fileName || `campaign_${Date.now()}.jpg`;
         const mimeType = img.meta?.mimeType || 'image/jpeg';
-        
+
         try {
           const uploadUrl = `${API_CONFIG.BASE_URL}/upload/image`;
           const headers = await apiService.getHeaders();
-          
+
           const uploadRes = await FileSystem.uploadAsync(uploadUrl, img.uri, {
             fieldName: 'file',
             httpMethod: 'POST',
@@ -1292,7 +1571,7 @@ export default function SellerDashboardScreen({ navigation }) {
 
       setIsPublishing(false);
       setShowSuccess(true);
-      
+
       // Animate success checkmark
       Animated.spring(successScaleAnim, {
         toValue: 1,
@@ -1310,6 +1589,7 @@ export default function SellerDashboardScreen({ navigation }) {
       setIsPublishing(false);
       Alert.alert("Error", error.message || "Failed to publish campaign");
     }
+
   };
 
   const handleDeleteCampaign = (id) => {
@@ -1361,7 +1641,7 @@ export default function SellerDashboardScreen({ navigation }) {
     switch (status) {
       case 'HOT': return '#EF4444';
       case 'WARM': return '#F59E0B';
-      case 'NEW': return '#3B82F6';
+      case 'NEW': return '#8B5CF6';
       case 'COLD': return '#6B7280';
       default: return COLORS.TEXT_SECONDARY;
     }
@@ -1373,9 +1653,9 @@ export default function SellerDashboardScreen({ navigation }) {
   });
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
 
-      {/* ── New Message Notification Popup (Seller) ── */}
+      {/* â”€â”€ New Message Notification Popup (Seller) â”€â”€ */}
       {sellerMsgNotifVisible && (
         <Animated.View
           style={[
@@ -1414,30 +1694,30 @@ export default function SellerDashboardScreen({ navigation }) {
       {/* SECTION 1: HEADER */}
 
       <View style={[styles.header, { backgroundColor: 'transparent', borderBottomWidth: 0 }]}>
-        <Text style={[styles.logoText, { color: '#2563EB' }]}>Reachlo</Text>
+        <Text style={[styles.logoText, { color: theme.sellerPrimary }]}>Reachlo</Text>
         <View style={styles.headerRight}>
-          <Pressable 
+          <Pressable
             style={[styles.bellContainer, { marginRight: 8 }]}
             onPress={() => navigation.navigate('SellerMessages')}
           >
-            <Ionicons name="chatbubbles-outline" size={24} color="#1E293B" />
+            <Ionicons name="chatbubbles-outline" size={24} color={theme.text} />
           </Pressable>
-          <Pressable 
+          <Pressable
             style={styles.bellContainer}
             onPress={() => setNotificationsModalVisible(true)}
           >
-            <Text style={styles.bellIcon}>🔔</Text>
+            <Ionicons name="notifications-outline" size={24} color={theme.text} />
             {allNewLeads.length > 0 && (
               <View style={styles.bellBadge}>
                 <Text style={styles.bellBadgeText}>{allNewLeads.length}</Text>
               </View>
             )}
           </Pressable>
-          <Pressable 
+          <Pressable
             onPress={() => handleTabChange('Profile')}
-            style={[styles.avatar, { backgroundColor: 'rgba(255,255,255,0.7)', borderWidth: 1, borderColor: '#38BDF8' }]}
+            style={[styles.avatar, { backgroundColor: 'rgba(255,255,255,0.7)', borderWidth: 1, borderColor: '#9333EA' }]}
           >
-            <Text style={[styles.avatarText, { color: '#2563EB' }]}>
+            <Text style={[styles.avatarText, { color: theme.sellerPrimary }]}>
               {getFirstLetter(user?.name)}
             </Text>
           </Pressable>
@@ -1450,13 +1730,15 @@ export default function SellerDashboardScreen({ navigation }) {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
+
+
           {activeTab === 'Home' && (
             <>
               {/* SECTION 2: UPGRADE YOUR SELLER EXPERIENCE */}
-              <LinearGradient colors={['#0C1445', '#1E3A8A']} style={styles.glassPremiumCard}>
+              <LinearGradient colors={['#4C1D95', '#6D28D9']} style={styles.glassPremiumCard}>
                 <View style={styles.premiumBannerInner}>
                   <View style={styles.premiumBannerLeft}>
-                    <Text style={styles.premiumCrownIcon}>👑</Text>
+                    <Ionicons name="star" size={28} color="#FFD700" style={{ marginRight: 12 }} />
                     <View>
                       <Text style={styles.glassPremiumTitle}>Unlock Premium Features</Text>
                       <Text style={styles.glassPremiumDesc}>Boost campaigns & reach more buyers.</Text>
@@ -1469,44 +1751,40 @@ export default function SellerDashboardScreen({ navigation }) {
               </LinearGradient>
 
               {/* SECTION 3: YOUR GROWTH THIS MONTH + KPI ANALYTICS */}
-              <Text style={styles.growthMonthLabel}>YOUR GROWTH THIS MONTH</Text>
+              <Text style={[styles.growthMonthLabel, { color: theme.textSecondary }]}>YOUR GROWTH THIS MONTH</Text>
               <View style={styles.kpiRow}>
-                <BlurView intensity={20} tint="light" style={styles.kpiCard}>
-                  <Text style={styles.kpiIcon}>👁️</Text>
+                <View style={[styles.kpiCard, { backgroundColor: theme.cardBackground, borderColor: theme.border, borderWidth: 1, flex: 1, marginHorizontal: 4 }]}>
+                  <Ionicons name="eye-outline" size={24} color={theme.sellerPrimary} style={styles.kpiIcon} />
                   <View>
-                    <Text style={styles.kpiValue}>{totalViews}</Text>
-                    <Text style={styles.kpiLabel}>Views</Text>
+                    <Text style={[styles.kpiValue, { color: theme.text }]}>{totalViews}</Text>
+                    <Text style={[styles.kpiLabel, { color: theme.textSecondary }]}>Views</Text>
                   </View>
-                </BlurView>
-                <BlurView intensity={20} tint="light" style={styles.kpiCard}>
-                  <Text style={styles.kpiIcon}>⚡</Text>
+                </View>
+                <View style={[styles.kpiCard, { backgroundColor: theme.cardBackground, borderColor: theme.border, borderWidth: 1, flex: 1, marginHorizontal: 4 }]}>
+                  <Ionicons name="flash-outline" size={24} color={theme.sellerPrimary} style={styles.kpiIcon} />
                   <View>
-                    <Text style={styles.kpiValue}>{totalLeads}</Text>
-                    <Text style={styles.kpiLabel}>Leads</Text>
+                    <Text style={[styles.kpiValue, { color: theme.text }]}>{activeCount}</Text>
+                    <Text style={[styles.kpiLabel, { color: theme.textSecondary }]}>Active</Text>
                   </View>
-                </BlurView>
-                <BlurView intensity={20} tint="light" style={styles.kpiCard}>
-                  <Text style={styles.kpiIcon}>📢</Text>
+                </View>
+                <View style={[styles.kpiCard, { backgroundColor: theme.cardBackground, borderColor: theme.border, borderWidth: 1, flex: 1, marginHorizontal: 4 }]}>
+                  <Ionicons name="people-outline" size={24} color={theme.sellerPrimary} style={styles.kpiIcon} />
                   <View>
-                    <Text style={styles.kpiValue}>{activeCount}</Text>
-                    <Text style={styles.kpiLabel}>Active</Text>
+                    <Text style={[styles.kpiValue, { color: theme.text }]}>{totalLeads}</Text>
+                    <Text style={[styles.kpiLabel, { color: theme.textSecondary }]}>Leads</Text>
                   </View>
-                </BlurView>
+                </View>
               </View>
 
               {/* SECTION 3: Action Cards (Replaces old Main CTA) */}
-              <Text style={[styles.subsectionTitle, { marginBottom: 12 }]}>Launch Campaign</Text>
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false} 
-                contentContainerStyle={{ paddingRight: 20, paddingBottom: 16, gap: 12 }}
-              >
+              <Text style={[styles.subsectionTitle, { marginBottom: 12, color: theme.text }]}>Launch Campaign</Text>
+              <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
                 {/* Card 1: Generate with AI (Placed first to emphasize) */}
-                <Pressable 
-                  onPress={() => navigation.navigate('AICampaignGenerate')} 
-                  style={{ width: 180, height: 140, borderRadius: 16, overflow: 'hidden' }}
+                <Pressable
+                  onPress={() => navigation.navigate('AICampaignGenerate')}
+                  style={{ flex: 1, height: 140, borderRadius: 16, overflow: 'hidden' }}
                 >
-                  <LinearGradient colors={['#38BDF8', '#1A73E8']} style={{ flex: 1, padding: 16, justifyContent: 'space-between' }}>
+                  <LinearGradient colors={['#A78BFA', '#7C3AED']} style={{ flex: 1, padding: 14, justifyContent: 'space-between' }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' }}>
                         <Ionicons name="sparkles" size={20} color="#FFFFFF" />
@@ -1516,38 +1794,38 @@ export default function SellerDashboardScreen({ navigation }) {
                       </View>
                     </View>
                     <View>
-                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '700', marginBottom: 4 }}>Generate with AI</Text>
-                      <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12 }}>Instant, professional campaigns</Text>
+                      <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700', marginBottom: 4 }} numberOfLines={1}>Generate with AI</Text>
+                      <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 11 }} numberOfLines={2}>Instant, professional campaigns</Text>
                     </View>
                   </LinearGradient>
                 </Pressable>
 
                 {/* Card 2: Build Manually */}
-                <Pressable 
-                  onPress={openCreateCampaign} 
-                  style={{ width: 180, height: 140, borderRadius: 16, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E7EB', padding: 16, justifyContent: 'space-between' }}
+                <Pressable
+                  onPress={openCreateCampaign}
+                  style={{ flex: 1, height: 140, borderRadius: 16, backgroundColor: theme.cardBackground, borderWidth: 1, borderColor: theme.border, padding: 14, justifyContent: 'space-between' }}
                 >
-                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#F0F4FF', justifyContent: 'center', alignItems: 'center' }}>
-                    <Ionicons name="construct-outline" size={20} color="#1A73E8" />
+                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: theme.surfaceSecondary, justifyContent: 'center', alignItems: 'center' }}>
+                    <Ionicons name="construct-outline" size={20} color={theme.buyerPrimary} />
                   </View>
                   <View>
-                    <Text style={{ color: '#1F2937', fontSize: 16, fontWeight: '700', marginBottom: 4 }}>Build Manually</Text>
-                    <Text style={{ color: '#6B7280', fontSize: 12 }}>Create your campaign step by step</Text>
+                    <Text style={{ color: theme.text, fontSize: 14, fontWeight: '700', marginBottom: 4 }} numberOfLines={1}>Build Manually</Text>
+                    <Text style={{ color: theme.textSecondary, fontSize: 11 }} numberOfLines={2}>Create your campaign step by step</Text>
                   </View>
                 </Pressable>
-              </ScrollView>
+              </View>
 
               {/* SECTION 4: MY CAMPAIGNS */}
 
               {/* Your Campaigns Section */}
-              <Text style={styles.subsectionTitle}>Your Campaigns</Text>
+              <Text style={[styles.subsectionTitle, { color: theme.text }]}>Your Campaigns</Text>
               {liveCampaigns.length === 0 ? (
                 <View style={styles.emptyContainer}>
                   <Text style={styles.emptyTitle}>Create Your First Campaign</Text>
                   <Text style={styles.emptyText}>
                     Reach local buyers, generate leads, and grow your business without expensive advertising.
                   </Text>
-                  <PrimaryButton
+                  <PrimaryButton theme="seller"
                     title="+ Create New Campaign"
                     onPress={openCreateCampaign}
                     style={styles.emptyBtn}
@@ -1569,36 +1847,17 @@ export default function SellerDashboardScreen({ navigation }) {
 
           {activeTab === 'Campaigns' && (
             <>
-              <Text style={styles.sectionTitle}>All Campaigns</Text>
-              <Text style={styles.sectionSubtitle}>
-                Manage and view statistics of all campaigns you have run.
-              </Text>
 
               {/* LIVE CAMPAIGNS SECTION */}
               <View style={styles.campaignSectionHeaderRow}>
-                <Text style={styles.subsectionTitle}>Live Campaigns</Text>
-                <View style={styles.sortToggleRow}>
-                  <Text style={styles.sortLabel}>Sort by:</Text>
-                  <Pressable 
-                    style={[styles.sortBtn, liveSortBy === 'views' && styles.sortBtnActive]}
-                    onPress={() => setLiveSortBy('views')}
-                  >
-                    <Text style={[styles.sortBtnText, liveSortBy === 'views' && styles.sortBtnTextActive]}>Views</Text>
-                  </Pressable>
-                  <Pressable 
-                    style={[styles.sortBtn, liveSortBy === 'leads' && styles.sortBtnActive]}
-                    onPress={() => setLiveSortBy('leads')}
-                  >
-                    <Text style={[styles.sortBtnText, liveSortBy === 'leads' && styles.sortBtnTextActive]}>Leads</Text>
-                  </Pressable>
-                </View>
+                <Text style={[styles.subsectionTitle, { color: theme.text }]}>Live Campaigns</Text>
               </View>
 
               {sortedLiveCampaigns.length === 0 ? (
                 <View style={styles.emptyContainer}>
                   <Text style={styles.emptyTitle}>No Live Campaigns</Text>
                   <Text style={styles.emptyText}>You don't have any currently active campaigns.</Text>
-                  <PrimaryButton
+                  <PrimaryButton theme="seller"
                     title="+ Create New Campaign"
                     onPress={openCreateCampaign}
                     style={styles.emptyBtn}
@@ -1618,7 +1877,7 @@ export default function SellerDashboardScreen({ navigation }) {
 
               {/* PAST CAMPAIGNS SECTION */}
               <View style={[styles.campaignsHeaderRow, { marginTop: 24 }]}>
-                <Text style={styles.subsectionTitle}>Past Campaigns</Text>
+                <Text style={[styles.subsectionTitle, { color: theme.text }]}>Past Campaigns</Text>
               </View>
 
               {pastCampaigns.length === 0 ? (
@@ -1639,10 +1898,17 @@ export default function SellerDashboardScreen({ navigation }) {
 
           {activeTab === 'Profile' && (
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sellerProfileScrollContent}>
-              {/* Premium Profile Header */}
-              <View style={styles.sellerProfileHeaderMinimal}>
-                <View style={styles.sellerProfileGlassCard}>
-                  <Pressable onPress={async () => {
+              {/* Horizontal Profile Header Card */}
+              <View style={[
+                styles.sellerProfileGlassCard,
+                {
+                  backgroundColor: isDarkMode ? '#111A2D' : '#FFFFFF',
+                  borderColor: isDarkMode ? 'rgba(255,255,255,0.10)' : '#E8EDF5',
+                  shadowColor: isDarkMode ? '#000' : '#64748B',
+                }
+              ]}>
+                {/* Avatar on left */}
+                <Pressable onPress={async () => {
                     try {
                       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
                       if (permission.status !== 'granted') {
@@ -1684,141 +1950,189 @@ export default function SellerDashboardScreen({ navigation }) {
                     }
                   }} style={styles.sellerAvatarContainer}>
                     {user?.profile_picture ? (
-                      <Image source={{ uri: resolveMediaUrl(user.profile_picture) }} style={styles.sellerAvatarImage} />
+                      <Image source={{ uri: resolveMediaUrl(user.profile_picture) }} style={[
+                        styles.sellerAvatarImage,
+                        { borderColor: theme.sellerPrimary }
+                      ]} />
                     ) : (
-                      <View style={styles.sellerAvatarFallback}>
-                        <Text style={styles.sellerAvatarFallbackText}>
+                      <View style={[
+                        styles.sellerAvatarFallback,
+                        {
+                          backgroundColor: isDarkMode ? '#1E2D4A' : '#EDE9FE',
+                          borderColor: theme.sellerPrimary,
+                        }
+                      ]}>
+                        <Text style={[styles.sellerAvatarFallbackText, { color: theme.sellerPrimary }]}>
                           {(user?.name || 'S').charAt(0).toUpperCase()}
                         </Text>
                       </View>
                     )}
-                    <View style={styles.sellerCameraIconBadge}>
+                    <View style={[styles.sellerCameraIconBadge, { backgroundColor: theme.sellerPrimary, borderColor: isDarkMode ? '#111A2D' : '#FFFFFF' }]}>
                       <Ionicons name="camera" size={12} color="#FFF" />
                     </View>
                   </Pressable>
 
-                  <Text style={styles.sellerProfileNameTextMinimal}>{user?.name || 'Seller Name'}</Text>
-                  <Text style={styles.sellerBusinessNameTextMinimal}>{businessName || 'Business Name'}</Text>
+                {/* Name + Business on right */}
+                <View style={styles.sellerProfileTextBlock}>
+                  <Text style={[styles.sellerProfileNameTextMinimal, { color: isDarkMode ? '#F8FAFF' : '#111827' }]} numberOfLines={1}>
+                    {user?.name || 'Seller Name'}
+                  </Text>
+                  <Text style={[styles.sellerBusinessNameTextMinimal, { color: isDarkMode ? '#AAB6CC' : '#667085' }]} numberOfLines={2}>
+                    {businessName || 'Business Name'}
+                  </Text>
+                  <View style={[styles.sellerVerifiedBadge, { backgroundColor: isDarkMode ? 'rgba(74,222,128,0.12)' : '#F0FDF4', borderColor: isDarkMode ? 'rgba(74,222,128,0.25)' : '#BBF7D0' }]}>
+                    <Ionicons name="shield-checkmark" size={11} color={isDarkMode ? '#4ADE80' : '#16A34A'} />
+                    <Text style={[styles.sellerVerifiedText, { color: isDarkMode ? '#4ADE80' : '#16A34A' }]}>Verified</Text>
+                  </View>
                 </View>
               </View>
 
               {/* Business Statistics Card */}
-              <View style={styles.statsCardPremium}>
+              <View style={[styles.statsCardPremium, {
+                backgroundColor: isDarkMode ? '#111A2D' : '#FFFFFF',
+                borderColor: isDarkMode ? 'rgba(255,255,255,0.10)' : '#E8EDF5',
+                shadowColor: isDarkMode ? '#000' : '#64748B',
+              }]}>
                 <View style={styles.statItemPremium}>
-                  <View style={styles.statIconBadge}>
-                    <Ionicons name="megaphone-outline" size={20} color="#2563EB" />
+                  <View style={[styles.statIconBadge, { backgroundColor: theme.surfaceSecondary }]}>
+                    <Ionicons name="megaphone-outline" size={20} color={theme.sellerPrimary} />
                   </View>
-                  <Text style={styles.statValuePremium}>{activeCount}</Text>
-                  <Text style={styles.statLabelPremium}>Campaigns</Text>
+                  <Text style={[styles.statValuePremium, { color: theme.text }]}>{activeCount}</Text>
+                  <Text style={[styles.statLabelPremium, { color: theme.textSecondary }]}>Campaigns</Text>
                 </View>
                 <View style={styles.statItemPremium}>
-                  <View style={styles.statIconBadge}>
-                    <Ionicons name="people-outline" size={20} color="#059669" />
+                  <View style={[styles.statIconBadge, { backgroundColor: theme.surfaceSecondary }]}>
+                    <Ionicons name="eye-outline" size={20} color={theme.buyerPrimary} />
                   </View>
-                  <Text style={styles.statValuePremium}>{totalLeads}</Text>
-                  <Text style={styles.statLabelPremium}>Leads</Text>
-                </View>
-                <View style={styles.statItemPremium}>
-                  <View style={styles.statIconBadge}>
-                    <Ionicons name="eye-outline" size={20} color="#D97706" />
-                  </View>
-                  <Text style={styles.statValuePremium}>{totalViews}</Text>
-                  <Text style={styles.statLabelPremium}>Views</Text>
+                  <Text style={[styles.statValuePremium, { color: theme.text }]}>{totalViews}</Text>
+                  <Text style={[styles.statLabelPremium, { color: theme.textSecondary }]}>Views</Text>
                 </View>
               </View>
 
               {/* Account Settings Section */}
-              <View style={styles.sellerSettingsCard}>
-                <Text style={styles.sellerCardHeaderTitle}>Account Settings</Text>
+              <View style={[styles.sellerSettingsCard, {
+                backgroundColor: isDarkMode ? '#111A2D' : '#FFFFFF',
+                borderColor: isDarkMode ? 'rgba(255,255,255,0.10)' : '#EEF2F8',
+                shadowColor: isDarkMode ? '#000' : '#64748B',
+              }]}>
+                <Text style={[styles.sellerCardHeaderTitle, { color: isDarkMode ? '#AAB6CC' : '#64748B' }]}>ACCOUNT SETTINGS</Text>
 
                 {/* Edit Profile */}
-                <Pressable 
+                <Pressable
                   onPress={() => navigation.navigate('SellerEditProfile')}
-                  style={({ pressed }) => [styles.sellerOptionRow, pressed && styles.sellerOptionPressed]}
+                  style={({ pressed }) => [styles.sellerOptionRow, { borderBottomColor: isDarkMode ? 'rgba(255,255,255,0.07)' : '#F1F5F9' }, pressed && styles.sellerOptionPressed]}
                 >
                   <View style={styles.sellerOptionLeft}>
-                    <Ionicons name="person-outline" size={20} color="#2563EB" style={styles.sellerOptionIcon} />
-                    <Text style={styles.sellerOptionLabelText}>Edit Profile</Text>
+                    <View style={[styles.sellerOptionIconWrap, { backgroundColor: isDarkMode ? 'rgba(124,58,237,0.18)' : '#EDE9FE' }]}>
+                      <Ionicons name="person-outline" size={20} color={theme.sellerPrimary} />
+                    </View>
+                    <Text style={[styles.sellerOptionLabelText, { color: isDarkMode ? '#F8FAFF' : '#1E293B' }]}>Edit Profile</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                  <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#4A5A74' : '#CBD5E1'} />
+                </Pressable>
+
+                {/* Settings */}
+                <Pressable
+                  onPress={() => navigation.navigate('SellerSettings')}
+                  style={({ pressed }) => [styles.sellerOptionRow, { borderBottomColor: isDarkMode ? 'rgba(255,255,255,0.07)' : '#F1F5F9' }, pressed && styles.sellerOptionPressed]}
+                >
+                  <View style={styles.sellerOptionLeft}>
+                    <View style={[styles.sellerOptionIconWrap, { backgroundColor: isDarkMode ? 'rgba(124,58,237,0.18)' : '#EDE9FE' }]}>
+                      <Ionicons name="settings-outline" size={20} color={theme.sellerPrimary} />
+                    </View>
+                    <Text style={[styles.sellerOptionLabelText, { color: isDarkMode ? '#F8FAFF' : '#1E293B' }]}>Settings</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#4A5A74' : '#CBD5E1'} />
                 </Pressable>
 
                 {/* Change Password */}
-                <Pressable 
+                <Pressable
                   onPress={() => navigation.navigate('ForgotPassword')}
-                  style={({ pressed }) => [styles.sellerOptionRow, pressed && styles.sellerOptionPressed]}
+                  style={({ pressed }) => [styles.sellerOptionRow, { borderBottomColor: isDarkMode ? 'rgba(255,255,255,0.07)' : '#F1F5F9' }, pressed && styles.sellerOptionPressed]}
                 >
                   <View style={styles.sellerOptionLeft}>
-                    <Ionicons name="lock-closed-outline" size={20} color="#2563EB" style={styles.sellerOptionIcon} />
-                    <Text style={styles.sellerOptionLabelText}>Change Password</Text>
+                    <View style={[styles.sellerOptionIconWrap, { backgroundColor: isDarkMode ? 'rgba(124,58,237,0.18)' : '#EDE9FE' }]}>
+                      <Ionicons name="lock-closed-outline" size={20} color={theme.sellerPrimary} />
+                    </View>
+                    <Text style={[styles.sellerOptionLabelText, { color: isDarkMode ? '#F8FAFF' : '#1E293B' }]}>Change Password</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                  <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#4A5A74' : '#CBD5E1'} />
                 </Pressable>
 
                 {/* Edit Business Details */}
-                <Pressable 
+                <Pressable
                   onPress={() => navigation.navigate('SellerEditBusiness')}
-                  style={({ pressed }) => [styles.sellerOptionRow, pressed && styles.sellerOptionPressed]}
+                  style={({ pressed }) => [styles.sellerOptionRow, { borderBottomColor: isDarkMode ? 'rgba(255,255,255,0.07)' : '#F1F5F9' }, pressed && styles.sellerOptionPressed]}
                 >
                   <View style={styles.sellerOptionLeft}>
-                    <Ionicons name="business-outline" size={20} color="#2563EB" style={styles.sellerOptionIcon} />
-                    <Text style={styles.sellerOptionLabelText}>Edit Business Details</Text>
+                    <View style={[styles.sellerOptionIconWrap, { backgroundColor: isDarkMode ? 'rgba(124,58,237,0.18)' : '#EDE9FE' }]}>
+                      <Ionicons name="business-outline" size={20} color={theme.sellerPrimary} />
+                    </View>
+                    <Text style={[styles.sellerOptionLabelText, { color: isDarkMode ? '#F8FAFF' : '#1E293B' }]}>Edit Business Details</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                  <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#4A5A74' : '#CBD5E1'} />
                 </Pressable>
 
                 {/* Help & Support */}
-                <Pressable 
+                <Pressable
                   onPress={() => navigation.navigate('HelpSupport')}
-                  style={({ pressed }) => [styles.sellerOptionRow, pressed && styles.sellerOptionPressed]}
+                  style={({ pressed }) => [styles.sellerOptionRow, { borderBottomColor: isDarkMode ? 'rgba(255,255,255,0.07)' : '#F1F5F9' }, pressed && styles.sellerOptionPressed]}
                 >
                   <View style={styles.sellerOptionLeft}>
-                    <Ionicons name="help-buoy-outline" size={20} color="#2563EB" style={styles.sellerOptionIcon} />
-                    <Text style={styles.sellerOptionLabelText}>Help & Support</Text>
+                    <View style={[styles.sellerOptionIconWrap, { backgroundColor: isDarkMode ? 'rgba(124,58,237,0.18)' : '#EDE9FE' }]}>
+                      <Ionicons name="help-buoy-outline" size={20} color={theme.sellerPrimary} />
+                    </View>
+                    <Text style={[styles.sellerOptionLabelText, { color: isDarkMode ? '#F8FAFF' : '#1E293B' }]}>Help & Support</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                  <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#4A5A74' : '#CBD5E1'} />
                 </Pressable>
 
                 {/* Privacy Policy */}
-                <Pressable 
+                <Pressable
                   onPress={() => navigation.navigate('PrivacyPolicy')}
-                  style={({ pressed }) => [styles.sellerOptionRow, pressed && styles.sellerOptionPressed]}
+                  style={({ pressed }) => [styles.sellerOptionRow, { borderBottomColor: isDarkMode ? 'rgba(255,255,255,0.07)' : '#F1F5F9' }, pressed && styles.sellerOptionPressed]}
                 >
                   <View style={styles.sellerOptionLeft}>
-                    <Ionicons name="shield-checkmark-outline" size={20} color="#2563EB" style={styles.sellerOptionIcon} />
-                    <Text style={styles.sellerOptionLabelText}>Privacy Policy</Text>
+                    <View style={[styles.sellerOptionIconWrap, { backgroundColor: isDarkMode ? 'rgba(124,58,237,0.18)' : '#EDE9FE' }]}>
+                      <Ionicons name="shield-checkmark-outline" size={20} color={theme.sellerPrimary} />
+                    </View>
+                    <Text style={[styles.sellerOptionLabelText, { color: isDarkMode ? '#F8FAFF' : '#1E293B' }]}>Privacy Policy</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                  <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#4A5A74' : '#CBD5E1'} />
                 </Pressable>
 
                 {/* About Reachlo */}
-                <Pressable 
+                <Pressable
                   onPress={() => navigation.navigate('AboutReachlo')}
-                  style={({ pressed }) => [styles.sellerOptionRow, pressed && styles.sellerOptionPressed]}
+                  style={({ pressed }) => [styles.sellerOptionRow, { borderBottomColor: isDarkMode ? 'rgba(255,255,255,0.07)' : '#F1F5F9' }, pressed && styles.sellerOptionPressed]}
                 >
                   <View style={styles.sellerOptionLeft}>
-                    <Ionicons name="information-circle-outline" size={20} color="#2563EB" style={styles.sellerOptionIcon} />
-                    <Text style={styles.sellerOptionLabelText}>About REACHLO</Text>
+                    <View style={[styles.sellerOptionIconWrap, { backgroundColor: isDarkMode ? 'rgba(124,58,237,0.18)' : '#EDE9FE' }]}>
+                      <Ionicons name="information-circle-outline" size={20} color={theme.sellerPrimary} />
+                    </View>
+                    <Text style={[styles.sellerOptionLabelText, { color: isDarkMode ? '#F8FAFF' : '#1E293B' }]}>About REACHLO</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                  <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#4A5A74' : '#CBD5E1'} />
                 </Pressable>
 
                 {/* Rate REACHLO */}
-                <Pressable 
+                <Pressable
                   onPress={() => setShowRatingModal(true)}
-                  style={({ pressed }) => [styles.sellerOptionRow, pressed && styles.sellerOptionPressed]}
+                  style={({ pressed }) => [styles.sellerOptionRow, { borderBottomWidth: 0 }, pressed && styles.sellerOptionPressed]}
                 >
                   <View style={styles.sellerOptionLeft}>
-                    <Ionicons name="star-outline" size={20} color="#EAB308" style={styles.sellerOptionIcon} />
-                    <Text style={styles.sellerOptionLabelText}>Rate REACHLO</Text>
+                    <View style={[styles.sellerOptionIconWrap, { backgroundColor: isDarkMode ? 'rgba(251,191,36,0.15)' : '#FFFBEB' }]}>
+                      <Ionicons name="star-outline" size={20} color={theme.warning} />
+                    </View>
+                    <Text style={[styles.sellerOptionLabelText, { color: isDarkMode ? '#F8FAFF' : '#1E293B' }]}>Rate REACHLO</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                  <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#4A5A74' : '#CBD5E1'} />
                 </Pressable>
               </View>
 
               {/* Logout Section */}
               <View style={styles.sellerLogoutSection}>
-                <Pressable 
+                <Pressable
                   onPress={() => {
                     Alert.alert(
                       'Confirm Logout',
@@ -1829,10 +2143,13 @@ export default function SellerDashboardScreen({ navigation }) {
                       ]
                     );
                   }}
-                  style={({ pressed }) => [styles.sellerLogoutButton, pressed && { opacity: 0.8 }]}
+                  style={({ pressed }) => [styles.sellerLogoutButton, {
+                    backgroundColor: isDarkMode ? '#1E1010' : '#FFFFFF',
+                    borderColor: isDarkMode ? '#65262A' : '#FCA5A5',
+                  }, pressed && { opacity: 0.8 }]}
                 >
-                  <Ionicons name="log-out-outline" size={20} color="#EF4444" style={{ marginRight: 8 }} />
-                  <Text style={styles.sellerLogoutButtonText}>Log Out</Text>
+                  <Ionicons name="log-out-outline" size={20} color={theme.error} style={{ marginRight: 8 }} />
+                  <Text style={[styles.sellerLogoutButtonText, { color: theme.error }]}>Log Out</Text>
                 </Pressable>
               </View>
             </ScrollView>
@@ -1841,37 +2158,39 @@ export default function SellerDashboardScreen({ navigation }) {
       </Animated.View>
 
       {/* FLOATING GLASS BOTTOM NAV */}
-      <View style={styles.sellerFloatingNavWrapper}>
-        <BlurView intensity={60} tint="light" style={styles.sellerFloatingNav}>
+      <View style={[styles.sellerFloatingNavWrapper, { shadowColor: isDarkMode ? "#000" : "#7C3AED" }]}>
+        <BlurView intensity={isDarkMode ? 40 : 60} tint={isDarkMode ? "dark" : "light"} style={[styles.sellerFloatingNav, { backgroundColor: theme.navBackground, borderColor: theme.navBorder }]}>
           <Pressable
             onPress={() => handleTabChange('Home')}
             style={styles.sellerNavItem}
           >
             {activeTab === 'Home' ? (
-              <LinearGradient colors={['#38BDF8', '#2563EB']} style={styles.sellerNavActivePill}>
-                <Text style={styles.sellerNavActiveIcon}>🏠</Text>
+              <LinearGradient colors={['#9333EA', '#7C3AED']} style={styles.sellerNavActivePill}>
+                <Ionicons name="home" size={14} color="#FFFFFF" />
                 <Text style={styles.sellerNavLabelActive}>Home</Text>
               </LinearGradient>
             ) : (
               <>
-                <Text style={styles.sellerNavInactiveIcon}>🏠</Text>
+                <Ionicons name="home-outline" size={20} color={theme.navTabInactive} />
                 <Text style={styles.sellerNavLabel}>Home</Text>
               </>
             )}
           </Pressable>
+
+
 
           <Pressable
             onPress={() => handleTabChange('Campaigns')}
             style={styles.sellerNavItem}
           >
             {activeTab === 'Campaigns' ? (
-              <LinearGradient colors={['#38BDF8', '#2563EB']} style={styles.sellerNavActivePill}>
-                <Text style={styles.sellerNavActiveIcon}>📢</Text>
+              <LinearGradient colors={['#9333EA', '#7C3AED']} style={styles.sellerNavActivePill}>
+                <Ionicons name="megaphone" size={14} color="#FFFFFF" />
                 <Text style={styles.sellerNavLabelActive}>Campaigns</Text>
               </LinearGradient>
             ) : (
               <>
-                <Text style={styles.sellerNavInactiveIcon}>📢</Text>
+                <Ionicons name="megaphone-outline" size={20} color={theme.navTabInactive} />
                 <Text style={styles.sellerNavLabel}>Campaigns</Text>
               </>
             )}
@@ -1882,13 +2201,13 @@ export default function SellerDashboardScreen({ navigation }) {
             style={styles.sellerNavItem}
           >
             {activeTab === 'Profile' ? (
-              <LinearGradient colors={['#38BDF8', '#2563EB']} style={styles.sellerNavActivePill}>
-                <Text style={styles.sellerNavActiveIcon}>👤</Text>
+              <LinearGradient colors={['#9333EA', '#7C3AED']} style={styles.sellerNavActivePill}>
+                <Ionicons name="person" size={14} color="#FFFFFF" />
                 <Text style={styles.sellerNavLabelActive}>Profile</Text>
               </LinearGradient>
             ) : (
               <>
-                <Text style={styles.sellerNavInactiveIcon}>👤</Text>
+                <Ionicons name="person-outline" size={20} color={theme.navTabInactive} />
                 <Text style={styles.sellerNavLabel}>Profile</Text>
               </>
             )}
@@ -1904,28 +2223,28 @@ export default function SellerDashboardScreen({ navigation }) {
         onRequestClose={() => setPlansModalVisible(false)}
       >
         <View style={styles.plansModalOverlay}>
-          <View style={styles.plansModalContent}>
-            <View style={styles.plansModalHeader}>
-              <Text style={styles.plansModalTitle}>Choose Your Growth Plan</Text>
+          <View style={[styles.plansModalContent, { backgroundColor: theme.cardBackground, borderColor: theme.border, borderWidth: 1 }]}>
+            <View style={[styles.plansModalHeader, { borderBottomColor: theme.border }]}>
+              <Text style={[styles.plansModalTitle, { color: theme.text }]}>Choose Your Growth Plan</Text>
               <Pressable onPress={() => setPlansModalVisible(false)} style={styles.plansCloseBtn}>
-                <Text style={styles.plansCloseBtnText}>✕</Text>
+                <Text style={[styles.plansCloseBtnText, { color: theme.textTertiary }]}>✕</Text>
               </Pressable>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.plansScrollContent}>
               {/* STARTER CARD */}
-              <View style={styles.planCard}>
+              <View style={[styles.planCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <View style={styles.planHeader}>
-                  <Text style={styles.planName}>STARTER</Text>
-                  <Text style={styles.planPrice}>₹0<Text style={styles.planPricePeriod}>/month</Text></Text>
+                  <Text style={[styles.planName, { color: theme.text }]}>STARTER</Text>
+                  <Text style={[styles.planPrice, { color: theme.text }]}>₹0<Text style={[styles.planPricePeriod, { color: theme.textSecondary }]}>/month</Text></Text>
                 </View>
-                <Text style={styles.planDesc}>Perfect for getting started</Text>
-                <View style={styles.planDivider} />
+                <Text style={[styles.planDesc, { color: theme.textSecondary }]}>Perfect for getting started</Text>
+                <View style={[styles.planDivider, { backgroundColor: theme.border }]} />
                 <View style={styles.planFeatures}>
-                  <Text style={styles.planFeatureText}>✓ 2 Active Campaigns</Text>
-                  <Text style={styles.planFeatureText}>✓ Lead Inbox</Text>
-                  <Text style={styles.planFeatureText}>✓ Basic Analytics</Text>
-                  <Text style={styles.planFeatureText}>✓ Business Profile</Text>
+                  <Text style={[styles.planFeatureText, { color: theme.text }]}>✓ 2 Active Campaigns</Text>
+                  <Text style={[styles.planFeatureText, { color: theme.text }]}>✓ Lead Inbox</Text>
+                  <Text style={[styles.planFeatureText, { color: theme.text }]}>✓ Basic Analytics</Text>
+                  <Text style={[styles.planFeatureText, { color: theme.text }]}>✓ Business Profile</Text>
                 </View>
                 <Pressable style={[styles.planBtn, styles.planBtnCurrent]} disabled={true}>
                   <Text style={styles.planBtnTextCurrent}>Current Plan</Text>
@@ -1961,19 +2280,19 @@ export default function SellerDashboardScreen({ navigation }) {
               </View>
 
               {/* SCALE CARD */}
-              <View style={styles.planCard}>
+              <View style={[styles.planCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <View style={styles.planHeader}>
-                  <Text style={styles.planName}>SCALE</Text>
-                  <Text style={styles.planPrice}>₹1,499<Text style={styles.planPricePeriod}>/month</Text></Text>
+                  <Text style={[styles.planName, { color: theme.text }]}>SCALE</Text>
+                  <Text style={[styles.planPrice, { color: theme.text }]}>₹1,499<Text style={[styles.planPricePeriod, { color: theme.textSecondary }]}>/month</Text></Text>
                 </View>
-                <Text style={styles.planDesc}>Best for serious growth</Text>
-                <View style={styles.planDivider} />
+                <Text style={[styles.planDesc, { color: theme.textSecondary }]}>Best for serious growth</Text>
+                <View style={[styles.planDivider, { backgroundColor: theme.border }]} />
                 <View style={styles.planFeatures}>
-                  <Text style={styles.planFeatureText}>✓ Unlimited Campaigns</Text>
-                  <Text style={styles.planFeatureText}>✓ Advanced Analytics</Text>
-                  <Text style={styles.planFeatureText}>✓ Lead Export (CSV)</Text>
-                  <Text style={styles.planFeatureText}>✓ Verified Business Badge</Text>
-                  <Text style={styles.planFeatureText}>✓ Priority Support</Text>
+                  <Text style={[styles.planFeatureText, { color: theme.text }]}>✓ Unlimited Campaigns</Text>
+                  <Text style={[styles.planFeatureText, { color: theme.text }]}>✓ Advanced Analytics</Text>
+                  <Text style={[styles.planFeatureText, { color: theme.text }]}>✓ Lead Export (CSV)</Text>
+                  <Text style={[styles.planFeatureText, { color: theme.text }]}>✓ Verified Business Badge</Text>
+                  <Text style={[styles.planFeatureText, { color: theme.text }]}>✓ Priority Support</Text>
                 </View>
                 <Pressable
                   style={[styles.planBtn, styles.planBtnPro]}
@@ -1987,18 +2306,18 @@ export default function SellerDashboardScreen({ navigation }) {
               </View>
 
               {/* AGENCY CARD */}
-              <View style={styles.planCard}>
+              <View style={[styles.planCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <View style={styles.planHeader}>
-                  <Text style={styles.planName}>AGENCY</Text>
-                  <Text style={styles.planPrice}>₹3,999<Text style={styles.planPricePeriod}>/month</Text></Text>
+                  <Text style={[styles.planName, { color: theme.text }]}>AGENCY</Text>
+                  <Text style={[styles.planPrice, { color: theme.text }]}>₹3,999<Text style={[styles.planPricePeriod, { color: theme.textSecondary }]}>/month</Text></Text>
                 </View>
-                <Text style={styles.planDesc}>For agencies & teams</Text>
-                <View style={styles.planDivider} />
+                <Text style={[styles.planDesc, { color: theme.textSecondary }]}>For agencies & teams</Text>
+                <View style={[styles.planDivider, { backgroundColor: theme.border }]} />
                 <View style={styles.planFeatures}>
-                  <Text style={styles.planFeatureText}>✓ Unlimited Campaigns</Text>
-                  <Text style={styles.planFeatureText}>✓ Manage 5 Accounts</Text>
-                  <Text style={styles.planFeatureText}>✓ Team Access</Text>
-                  <Text style={styles.planFeatureText}>✓ Dedicated Support</Text>
+                  <Text style={[styles.planFeatureText, { color: theme.text }]}>✓ Unlimited Campaigns</Text>
+                  <Text style={[styles.planFeatureText, { color: theme.text }]}>✓ Manage 5 Accounts</Text>
+                  <Text style={[styles.planFeatureText, { color: theme.text }]}>✓ Team Access</Text>
+                  <Text style={[styles.planFeatureText, { color: theme.text }]}>✓ Dedicated Support</Text>
                 </View>
                 <Pressable
                   style={[styles.planBtn, styles.planBtnContact]}
@@ -2026,7 +2345,7 @@ export default function SellerDashboardScreen({ navigation }) {
           {/* Dimmed Blurred Background */}
           <Pressable style={styles.modalOverlayDismiss} onPress={() => setCampaignModalVisible(false)} />
 
-          <Animated.View style={[styles.premiumModalSheet, { transform: [{ translateY: slideModalAnim }] }]}>
+          <Animated.View style={[styles.premiumModalSheet, { backgroundColor: theme.cardBackground, transform: [{ translateY: slideModalAnim }] }]}>
             {/* Glass Handle Bar */}
             <View style={styles.glassHandleWrap}>
               <View style={styles.modalHandle} />
@@ -2035,7 +2354,6 @@ export default function SellerDashboardScreen({ navigation }) {
             {showSuccess ? (
               <View style={styles.successContainer}>
                 <Animated.Text style={[styles.successIcon, { transform: [{ scale: successScaleAnim }] }]}>
-                  ✓
                 </Animated.Text>
                 <Text style={styles.successTitle}>Campaign Live</Text>
                 <Text style={styles.successSubtitle}>Your offer is now visible to buyers</Text>
@@ -2043,7 +2361,7 @@ export default function SellerDashboardScreen({ navigation }) {
             ) : (
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.premiumScrollContent}>
                 <View style={styles.modalContentHeader}>
-                  <Text style={styles.premiumModalTitle}>
+                  <Text style={[styles.premiumModalTitle, { color: theme.text }]}>
                     {editingCampaign ? 'Edit Campaign' : 'Campaign Setup'}
                   </Text>
                 </View>
@@ -2082,16 +2400,16 @@ export default function SellerDashboardScreen({ navigation }) {
                     <View style={[styles.stepDot, step >= 3 && styles.stepDotActive]} />
                   </View>
                   <View style={styles.stepLabelsRow}>
-                    <Text style={[styles.stepLabelText, step === 1 && styles.stepLabelActive]}>Basic Info</Text>
-                    <Text style={[styles.stepLabelText, step === 2 && styles.stepLabelActive]}>Audience</Text>
-                    <Text style={[styles.stepLabelText, step === 3 && styles.stepLabelActive]}>Publish</Text>
+                    <Text style={[styles.stepLabelText, { color: isDarkMode ? '#7B8FAB' : '#94A3B8' }, step === 1 && styles.stepLabelActive]}>Basic Info</Text>
+                    <Text style={[styles.stepLabelText, { color: isDarkMode ? '#7B8FAB' : '#94A3B8' }, step === 2 && styles.stepLabelActive]}>Audience</Text>
+                    <Text style={[styles.stepLabelText, { color: isDarkMode ? '#7B8FAB' : '#94A3B8' }, step === 3 && styles.stepLabelActive]}>Publish</Text>
                   </View>
                 </View>
 
                 {/* STEP 1: Basic Info */}
                 {step === 1 && (
                   <View style={styles.stepContent}>
-                    <Text style={styles.premiumInputSectionTitle}>Basic Info</Text>
+                    <Text style={[styles.premiumInputSectionTitle, { color: theme.text }]}>Basic Info</Text>
 
                     {/* Image Upload Area */}
                     {imageReview ? (
@@ -2149,9 +2467,9 @@ export default function SellerDashboardScreen({ navigation }) {
                         ) : (
                           <>
                             <View style={styles.uploadDivider} />
-                            <Text style={styles.uploadAreaTitle}>Campaign Image *</Text>
-                            <Text style={styles.uploadAreaSubtitle}>Drag or Upload</Text>
-                            <Text style={styles.uploadAreaHint}>Recommended: 1200×900 (4:3)</Text>
+                            <Text style={[styles.uploadAreaTitle, { color: theme.text }]}>Campaign Image *</Text>
+                            <Text style={[styles.uploadAreaSubtitle, { color: theme.textSecondary }]}>Drag or Upload</Text>
+                            <Text style={[styles.uploadAreaHint, { color: theme.textTertiary }]}>Recommended: 1200×900 (4:3)</Text>
                             <Text style={styles.uploadAreaFormats}>PNG, JPG</Text>
                             <View style={styles.uploadDivider} />
                           </>
@@ -2159,150 +2477,181 @@ export default function SellerDashboardScreen({ navigation }) {
                       </Pressable>
                     )}
 
-                    <View style={styles.cardInput}>
-                      <Text style={styles.cardInputLabel}>Campaign Title *</Text>
+                    <View style={[styles.cardInput, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                      <Text style={[styles.cardInputLabel, { color: theme.text }]}>Campaign Title *</Text>
                       <TextInput
                         value={campTitle}
                         onChangeText={setCampTitle}
-                        placeholder="e.g. Transform Your Mind and Body with Yoga"
-                        placeholderTextColor="#94A3B8"
-                        style={styles.cardInputField}
+                        style={[styles.cardInputField, { color: theme.text }]}
+                        placeholder="e.g. 50% Off Summer Collection"
+                        placeholderTextColor={theme.textTertiary}
                       />
                     </View>
 
-                    <View style={styles.cardInput}>
-                      <Text style={styles.cardInputLabel}>Description *</Text>
+                    <View style={[styles.cardInput, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                      <Text style={[styles.cardInputLabel, { color: theme.text }]}>Description *</Text>
                       <TextInput
                         value={campDesc}
                         onChangeText={setCampDesc}
-                        placeholder="Describe what customers get, instructions, terms..."
-                        placeholderTextColor="#94A3B8"
-                        style={[styles.cardInputField, styles.cardInputMultiline]}
+                        style={[styles.cardInputField, styles.cardInputMultiline, { color: theme.text }]}
+                        placeholder="Describe your offer in detail..."
+                        placeholderTextColor={theme.textTertiary}
                         multiline
                         numberOfLines={4}
                       />
                     </View>
 
-                    <View style={styles.cardInput}>
-                      <Text style={styles.cardInputLabel}>Offer Line *</Text>
+                    <View style={[styles.cardInput, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                      <Text style={[styles.cardInputLabel, { color: theme.text }]}>Offer Line *</Text>
                       <TextInput
                         value={campOfferLine}
                         onChangeText={setCampOfferLine}
                         placeholder="e.g. First Week Free"
-                        placeholderTextColor="#94A3B8"
-                        style={styles.cardInputField}
+                        placeholderTextColor={theme.textTertiary}
+                        style={[styles.cardInputField, { color: theme.text }]}
                       />
                     </View>
 
-                                    <View style={styles.locationCardWrapper}>
-                                      <BlurView intensity={55} tint="light" style={styles.locationCard}>
-                                        <View style={styles.locationTopRow}>
-                                          <Text style={styles.locationTitle}>📍 Business Location</Text>
-                                          <Text style={styles.locationNote}>Optional but recommended for better nearby recommendations.</Text>
-                                        </View>
+                    <View style={styles.locationCardWrapper}>
+                      <BlurView
+                        intensity={isDarkMode ? 25 : 55}
+                        tint={isDarkMode ? 'dark' : 'light'}
+                        style={[
+                          styles.locationCard,
+                          {
+                            backgroundColor: isDarkMode ? theme.surface : 'rgba(255,255,255,0.75)',
+                            borderColor: theme.border,
+                          },
+                        ]}
+                      >
+                        <View style={styles.locationTopRow}>
+                          <Text style={[styles.locationTitle, { color: theme.text }]}>📍 Business Location</Text>
+                          <Text style={[styles.locationNote, { color: theme.textSecondary }]}>Optional but recommended for better nearby recommendations.</Text>
+                        </View>
 
-                                        {/* Glassmorphism address display box */}
-                                        <BlurView intensity={30} tint="light" style={styles.locationAddressBox}>
-                                          <Ionicons name="location" size={16} color={locationSelected ? '#2563EB' : '#94A3B8'} style={{ marginRight: 8 }} />
-                                          <Text style={[styles.locationAddressBoxText, !locationSelected && styles.locationAddressBoxPlaceholder]} numberOfLines={3}>
-                                            {locationSelected && locationAddress
-                                              ? locationAddress
-                                              : 'No location selected yet. Use the buttons below to set one.'}
-                                          </Text>
-                                          {locationSelected && (
-                                            <Pressable onPress={() => { setLocationSelected(false); setLocationAddress(''); setLocationLat(null); setLocationLon(null); }}>
-                                              <Ionicons name="close-circle" size={18} color="#94A3B8" />
-                                            </Pressable>
-                                          )}
-                                        </BlurView>
+                        {/* Glassmorphism address display box */}
+                        <BlurView
+                          intensity={isDarkMode ? 18 : 30}
+                          tint={isDarkMode ? 'dark' : 'light'}
+                          style={[
+                            styles.locationAddressBox,
+                            {
+                              backgroundColor: isDarkMode ? theme.inputBackground : 'rgba(255,255,255,0.55)',
+                              borderColor: theme.border,
+                            },
+                          ]}
+                        >
+                          <Ionicons name="location" size={16} color={locationSelected ? theme.sellerPrimary : theme.textTertiary} style={{ marginRight: 8 }} />
+                          <Text style={[styles.locationAddressBoxText, { color: locationSelected ? theme.text : theme.textTertiary }]} numberOfLines={3}>
+                            {locationSelected && locationAddress
+                              ? locationAddress
+                              : 'No location selected yet. Use the buttons below to set one.'}
+                          </Text>
+                          {locationSelected && (
+                            <Pressable onPress={() => { setLocationSelected(false); setLocationAddress(''); setLocationLat(null); setLocationLon(null); }}>
+                              <Ionicons name="close-circle" size={18} color="#94A3B8" />
+                            </Pressable>
+                          )}
+                        </BlurView>
 
-                                        {/* Two horizontal blue glassmorphism buttons */}
-                                        <View style={styles.locationBtnsRow}>
-                                          <Pressable
-                                            onPress={async () => {
-                                              try {
-                                                const { status } = await Location.requestForegroundPermissionsAsync();
-                                                if (status !== 'granted') {
-                                                  Alert.alert('Permission denied', 'Allow location to use current location');
-                                                  return;
-                                                }
-                                                const cur = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
-                                                const rev = await Location.reverseGeocodeAsync({ latitude: cur.coords.latitude, longitude: cur.coords.longitude });
-                                                const place = rev && rev.length ? rev[0] : null;
-                                                const readable = place ? [place.name, place.street, place.subregion || place.region, place.region].filter(Boolean).join(', ') : '';
-                                                setLocationAddress(readable);
-                                                setLocationLat(cur.coords.latitude);
-                                                setLocationLon(cur.coords.longitude);
-                                                setLocationPlaceId(null);
-                                                setLocationSelected(true);
-                                              } catch (e) {
-                                                console.warn('Use current location failed', e);
-                                                Alert.alert('Error', 'Unable to detect location. Please search manually.');
-                                              }
-                                            }}
-                                            style={({ pressed }) => [styles.locationGlassBtn, pressed && styles.locationGlassBtnPressed]}
-                                          >
-                                            <BlurView intensity={60} tint="light" style={styles.locationGlassBtnInner}>
-                                              <Ionicons name="locate" size={16} color="#2563EB" style={{ marginRight: 6 }} />
-                                              <Text style={styles.locationGlassBtnText}>Use Current Location</Text>
-                                            </BlurView>
-                                          </Pressable>
+                        {/* Two horizontal blue glassmorphism buttons */}
+                        <View style={styles.locationBtnsRow}>
+                          <Pressable
+                            onPress={async () => {
+                              try {
+                                const { status } = await Location.requestForegroundPermissionsAsync();
+                                if (status !== 'granted') {
+                                  Alert.alert('Permission denied', 'Allow location to use current location');
+                                  return;
+                                }
+                                const cur = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
+                                const rev = await Location.reverseGeocodeAsync({ latitude: cur.coords.latitude, longitude: cur.coords.longitude });
+                                const place = rev && rev.length ? rev[0] : null;
+                                const readable = place ? [place.name, place.street, place.subregion || place.region, place.region].filter(Boolean).join(', ') : '';
+                                setLocationAddress(readable);
+                                setLocationLat(cur.coords.latitude);
+                                setLocationLon(cur.coords.longitude);
+                                setLocationPlaceId(null);
+                                setLocationSelected(true);
+                              } catch (e) {
+                                console.warn('Use current location failed', e);
+                                Alert.alert('Error', 'Unable to detect location. Please search manually.');
+                              }
+                            }}
+                            style={({ pressed }) => [styles.locationGlassBtn, pressed && styles.locationGlassBtnPressed]}
+                          >
+                            <BlurView
+                              intensity={isDarkMode ? 25 : 60}
+                              tint={isDarkMode ? 'dark' : 'light'}
+                              style={[
+                                styles.locationGlassBtnInner,
+                                { backgroundColor: isDarkMode ? theme.surfaceSecondary : 'rgba(219,234,254,0.75)' },
+                              ]}
+                            >
+                              <Ionicons name="locate" size={16} color={theme.sellerPrimary} style={{ marginRight: 6 }} />
+                              <Text style={[styles.locationGlassBtnText, { color: theme.sellerPrimary }]}>Use Current Location</Text>
+                            </BlurView>
+                          </Pressable>
 
-                                        </View>
+                        </View>
 
-                                        {/* Inline Search Bar */}
-                                        <View style={styles.inlineLocationSearchBar}>
-                                          <Ionicons name="search-outline" size={16} color="#94A3B8" style={{ marginRight: 8 }} />
-                                          <TextInput
-                                            style={styles.inlineLocationSearchInput}
-                                            placeholder="Search business address..."
-                                            placeholderTextColor="#94A3B8"
-                                            value={locationSearch}
-                                            onChangeText={handleLocationSearchChange}
-                                            returnKeyType="search"
-                                          />
-                                          {locationSearchLoading && <ActivityIndicator size="small" color="#2563EB" style={{ marginLeft: 6 }} />}
-                                          {locationSearch.length > 0 && !locationSearchLoading && (
-                                            <Pressable onPress={() => { setLocationSearch(''); setLocationSuggestions([]); }}>
-                                              <Ionicons name="close-circle" size={16} color="#94A3B8" />
-                                            </Pressable>
-                                          )}
-                                        </View>
+                        {/* Inline Search Bar */}
+                        <View style={[styles.inlineLocationSearchBar, { backgroundColor: theme.inputBackground, borderColor: theme.inputBorder }]}>
+                          <Ionicons name="search-outline" size={16} color={theme.textTertiary} style={{ marginRight: 8 }} />
+                          <TextInput
+                            style={[styles.inlineLocationSearchInput, { color: theme.text }]}
+                            placeholder="Search business address..."
+                            placeholderTextColor={theme.textTertiary}
+                            value={locationSearch}
+                            onChangeText={handleLocationSearchChange}
+                            returnKeyType="search"
+                          />
+                          {locationSearchLoading && <ActivityIndicator size="small" color={theme.sellerPrimary} style={{ marginLeft: 6 }} />}
+                          {locationSearch.length > 0 && !locationSearchLoading && (
+                            <Pressable onPress={() => { setLocationSearch(''); setLocationSuggestions([]); }}>
+                              <Ionicons name="close-circle" size={16} color={theme.textTertiary} />
+                            </Pressable>
+                          )}
+                        </View>
 
-                                        {/* Suggestions */}
-                                        {locationSuggestions.length > 0 && (
-                                          <View style={styles.inlineLocationSuggestionsList}>
-                                            {locationSuggestions.map((pred) => (
-                                              <Pressable
-                                                key={pred.place_id}
-                                                style={({ pressed }) => [styles.inlineLocationSuggestionItem, pressed && { backgroundColor: '#F0F9FF' }]}
-                                                onPress={() => handleSelectLocationSuggestion(pred)}
-                                              >
-                                                <Ionicons name="location-outline" size={14} color="#2563EB" style={{ marginRight: 8, marginTop: 2 }} />
-                                                <View style={{ flex: 1 }}>
-                                                  <Text style={styles.inlineLocationSuggestionMain} numberOfLines={1}>
-                                                    {pred.structured_formatting?.main_text || pred.description}
-                                                  </Text>
-                                                  <Text style={styles.inlineLocationSuggestionSub} numberOfLines={1}>
-                                                    {pred.structured_formatting?.secondary_text || ''}
-                                                  </Text>
-                                                </View>
-                                              </Pressable>
-                                            ))}
-                                          </View>
-                                        )}
+                        {/* Suggestions */}
+                        {locationSuggestions.length > 0 && (
+                          <View style={[styles.inlineLocationSuggestionsList, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                            {locationSuggestions.map((pred) => (
+                              <Pressable
+                                key={pred.place_id}
+                                style={({ pressed }) => [
+                                  styles.inlineLocationSuggestionItem,
+                                  { borderBottomColor: theme.border },
+                                  pressed && { backgroundColor: theme.surfaceSecondary },
+                                ]}
+                                onPress={() => handleSelectLocationSuggestion(pred)}
+                              >
+                                <Ionicons name="location-outline" size={14} color={theme.sellerPrimary} style={{ marginRight: 8, marginTop: 2 }} />
+                                <View style={{ flex: 1 }}>
+                                  <Text style={[styles.inlineLocationSuggestionMain, { color: theme.text }]} numberOfLines={1}>
+                                    {pred.structured_formatting?.main_text || pred.description}
+                                  </Text>
+                                  <Text style={[styles.inlineLocationSuggestionSub, { color: theme.textSecondary }]} numberOfLines={1}>
+                                    {pred.structured_formatting?.secondary_text || ''}
+                                  </Text>
+                                </View>
+                              </Pressable>
+                            ))}
+                          </View>
+                        )}
 
-                                      </BlurView>
-                                    </View>
+                      </BlurView>
+                    </View>
                   </View>
                 )}
 
                 {/* STEP 2: Audience */}
                 {step === 2 && (
                   <View style={styles.stepContent}>
-                    <Text style={styles.premiumInputSectionTitle}>Audience</Text>
+                    <Text style={[styles.premiumInputSectionTitle, { color: theme.text }]}>Audience</Text>
 
-                    <Text style={styles.premiumLabel}>Category *</Text>
+                    <Text style={[styles.premiumLabel, { color: theme.text }]}>Category *</Text>
                     <View style={styles.categoryGrid}>
                       {CATEGORIES.map((cat) => (
                         <Pressable
@@ -2313,13 +2662,15 @@ export default function SellerDashboardScreen({ navigation }) {
                           }}
                           style={[
                             styles.categoryChipGrid,
-                            campCategory === cat && styles.categoryChipSelected,
+                            { backgroundColor: isDarkMode ? '#111A2D' : '#FFFFFF', borderColor: theme.sellerPrimary },
+                            campCategory === cat && { backgroundColor: theme.sellerPrimary, borderColor: theme.sellerPrimary },
                           ]}
                         >
                           <Text
                             style={[
                               styles.categoryChipText,
-                              campCategory === cat && styles.categoryChipTextSelected,
+                              { color: isDarkMode ? '#FFFFFF' : '#1E293B' },
+                              campCategory === cat && { color: '#FFFFFF', fontWeight: 'bold' },
                             ]}
                             numberOfLines={2}
                           >
@@ -2329,7 +2680,7 @@ export default function SellerDashboardScreen({ navigation }) {
                       ))}
                     </View>
 
-                    <Text style={styles.premiumLabel}>Subcategory *</Text>
+                    <Text style={[styles.premiumLabel, { color: theme.text }]}>Subcategory *</Text>
                     <View style={styles.categoryGrid}>
                       {(CATEGORY_MAP[campCategory] || []).map((sub) => (
                         <Pressable
@@ -2337,13 +2688,15 @@ export default function SellerDashboardScreen({ navigation }) {
                           onPress={() => setCampSubCategory(sub)}
                           style={[
                             styles.categoryChipGrid,
-                            campSubCategory === sub && styles.categoryChipSelected,
+                            { backgroundColor: isDarkMode ? '#111A2D' : '#FFFFFF', borderColor: theme.sellerPrimary },
+                            campSubCategory === sub && { backgroundColor: theme.sellerPrimary, borderColor: theme.sellerPrimary },
                           ]}
                         >
                           <Text
                             style={[
                               styles.categoryChipText,
-                              campSubCategory === sub && styles.categoryChipTextSelected,
+                              { color: isDarkMode ? '#FFFFFF' : '#1E293B' },
+                              campSubCategory === sub && { color: '#FFFFFF', fontWeight: 'bold' },
                             ]}
                             numberOfLines={2}
                           >
@@ -2352,34 +2705,35 @@ export default function SellerDashboardScreen({ navigation }) {
                         </Pressable>
                       ))}
                     </View>
-                    
+
                     {campCategory === 'Others' && (
-                      <View style={[styles.cardInput, { marginTop: 12 }]}>
-                        <Text style={styles.cardInputLabel}>Custom Category Name *</Text>
+                      <View style={[styles.cardInput, { marginTop: 12, backgroundColor: theme.surface, borderColor: theme.border }]}>
+                        <Text style={[styles.cardInputLabel, { color: theme.text }]}>Custom Category Name *</Text>
                         <TextInput
                           value={campSubCategory === 'Other' ? '' : campSubCategory}
                           onChangeText={setCampSubCategory}
                           placeholder="e.g. Pet Grooming"
-                          placeholderTextColor="#94A3B8"
-                          style={styles.cardInputField}
+                          placeholderTextColor={theme.textTertiary}
+                          style={[styles.cardInputField, { color: theme.text }]}
                         />
                       </View>
                     )}
 
-                    <Text style={styles.premiumLabel}>Target Cities *</Text>
-                    <View style={styles.cardInput}>
+                    <Text style={[styles.premiumLabel, { color: theme.text }]}>Target Cities *</Text>
+                    <View style={[styles.cardInput, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                       {/* All over India toggle */}
                       <Pressable
                         style={[
                           styles.allIndiaBtn,
-                          selectedCities.includes(ALL_INDIA_TAG) && styles.allIndiaBtnActive
+                          { backgroundColor: isDarkMode ? '#111A2D' : '#FFFFFF', borderColor: theme.sellerPrimary },
+                          selectedCities.includes(ALL_INDIA_TAG) && { backgroundColor: theme.sellerPrimary, borderColor: theme.sellerPrimary }
                         ]}
                         onPress={toggleAllIndia}
                       >
                         <Ionicons
                           name={selectedCities.includes(ALL_INDIA_TAG) ? 'checkmark-circle' : 'earth-outline'}
                           size={16}
-                          color={selectedCities.includes(ALL_INDIA_TAG) ? '#FFFFFF' : '#2563EB'}
+                          color={selectedCities.includes(ALL_INDIA_TAG) ? '#FFFFFF' : theme.sellerPrimary}
                           style={{ marginRight: 6 }}
                         />
                         <Text style={[
@@ -2450,26 +2804,26 @@ export default function SellerDashboardScreen({ navigation }) {
                 {/* STEP 3: Pricing & Publish */}
                 {step === 3 && (
                   <View style={styles.stepContent}>
-                    <Text style={styles.premiumInputSectionTitle}>Pricing & Preview</Text>
+                    <Text style={[styles.premiumInputSectionTitle, { color: theme.text }]}>Pricing & Preview</Text>
 
-                    <View style={styles.cardInput}>
-                      <Text style={styles.cardInputLabel}>Price (₹)</Text>
+                    <View style={[styles.cardInput, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                      <Text style={[styles.cardInputLabel, { color: theme.text }]}>Price (₹)</Text>
                       <TextInput
                         value={campPrice}
                         onChangeText={setCampPrice}
                         placeholder="e.g. 5000"
                         placeholderTextColor="#94A3B8"
                         keyboardType="numeric"
-                        style={styles.cardInputField}
+                        style={[styles.cardInputField, { color: theme.text }]}
                       />
                     </View>
 
-                    <Text style={styles.premiumLabel}>Campaign Start Date *</Text>
+                    <Text style={[styles.premiumLabel, { color: theme.text }]}>Campaign Start Date *</Text>
                     <Pressable
                       onPress={() => { setShowStartCalendar(!showStartCalendar); setShowEndCalendar(false); setCalendarDate(campStartDate ? new Date(campStartDate) : new Date()); }}
-                      style={styles.cardInput}
+                      style={[styles.cardInput, { backgroundColor: theme.surface, borderColor: theme.border }]}
                     >
-                      <Text style={[styles.cardInputField, !campStartDate && styles.placeholderText]}>
+                      <Text style={[styles.cardInputField, { color: theme.text }, !campStartDate && styles.placeholderText]}>
                         {campStartDate || 'Select start date'}
                       </Text>
                     </Pressable>
@@ -2479,7 +2833,7 @@ export default function SellerDashboardScreen({ navigation }) {
                       const mo = calendarDate.getMonth();
                       const firstDay = new Date(yr, mo, 1).getDay();
                       const daysInMonth = new Date(yr, mo + 1, 0).getDate();
-                      const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+                      const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
                       const today = new Date();
                       return (
                         <View style={styles.calendarCard}>
@@ -2489,7 +2843,7 @@ export default function SellerDashboardScreen({ navigation }) {
                             <Pressable onPress={() => setCalendarDate(new Date(yr, mo + 1, 1))} style={styles.calendarNavBtn}><Text style={styles.calendarNavText}>›</Text></Pressable>
                           </View>
                           <View style={styles.calendarWeekRow}>
-                            {['Su','Mo','Tu','We','Th','Fr','Sa'].map((d) => (
+                            {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d) => (
                               <View key={d} style={styles.calendarWeekCell}><Text style={styles.calendarWeekText}>{d}</Text></View>
                             ))}
                           </View>
@@ -2513,12 +2867,12 @@ export default function SellerDashboardScreen({ navigation }) {
                       );
                     })()}
 
-                    <Text style={styles.premiumLabel}>Campaign End Date *</Text>
+                    <Text style={[styles.premiumLabel, { color: theme.text }]}>Campaign End Date *</Text>
                     <Pressable
                       onPress={() => { setShowEndCalendar(!showEndCalendar); setShowStartCalendar(false); setCalendarDate(campEndDate ? new Date(campEndDate) : (campStartDate ? new Date(campStartDate) : new Date())); }}
-                      style={styles.cardInput}
+                      style={[styles.cardInput, { backgroundColor: theme.surface, borderColor: theme.border }]}
                     >
-                      <Text style={[styles.cardInputField, !campEndDate && styles.placeholderText]}>
+                      <Text style={[styles.cardInputField, { color: theme.text }, !campEndDate && styles.placeholderText]}>
                         {campEndDate || 'Select end date'}
                       </Text>
                     </Pressable>
@@ -2528,7 +2882,7 @@ export default function SellerDashboardScreen({ navigation }) {
                       const mo = calendarDate.getMonth();
                       const firstDay = new Date(yr, mo, 1).getDay();
                       const daysInMonth = new Date(yr, mo + 1, 0).getDate();
-                      const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+                      const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
                       return (
                         <View style={styles.calendarCard}>
                           <View style={styles.calendarHeader}>
@@ -2537,7 +2891,7 @@ export default function SellerDashboardScreen({ navigation }) {
                             <Pressable onPress={() => setCalendarDate(new Date(yr, mo + 1, 1))} style={styles.calendarNavBtn}><Text style={styles.calendarNavText}>›</Text></Pressable>
                           </View>
                           <View style={styles.calendarWeekRow}>
-                            {['Su','Mo','Tu','We','Th','Fr','Sa'].map((d) => (
+                            {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d) => (
                               <View key={d} style={styles.calendarWeekCell}><Text style={styles.calendarWeekText}>{d}</Text></View>
                             ))}
                           </View>
@@ -2561,7 +2915,7 @@ export default function SellerDashboardScreen({ navigation }) {
                       );
                     })()}
 
-                    <Text style={styles.premiumLabel}>Live Preview</Text>
+                    <Text style={[styles.premiumLabel, { color: theme.text }]}>Live Preview</Text>
                     <CampaignFeedCard
                       campaign={{
                         title: campTitle || 'Campaign Title',
@@ -2577,8 +2931,8 @@ export default function SellerDashboardScreen({ navigation }) {
                         views: 0,
                         status: 'ACTIVE',
                       }}
-                      onPress={() => {}}
-                      onToggleSave={() => {}}
+                      onPress={() => { }}
+                      onToggleSave={() => { }}
                     />
                   </View>
                 )}
@@ -2669,7 +3023,7 @@ export default function SellerDashboardScreen({ navigation }) {
             authToken={null}
           />
           <Pressable style={{ padding: 12 }} onPress={() => setAutocompleteModalVisible(false)}>
-            <Text style={{ color: '#2563EB' }}>Close</Text>
+            <Text style={{ color: '#7C3AED' }}>Close</Text>
           </Pressable>
         </SafeAreaView>
       </Modal>
@@ -2690,73 +3044,324 @@ export default function SellerDashboardScreen({ navigation }) {
       />
 
       {/* LEAD INBOX MODAL */}
-      <CRMLeadsModal 
-        visible={leadsModalVisible} 
-        onClose={() => setLeadsModalVisible(false)} 
-        campaign={selectedCampaignForLeads} 
+      <CRMLeadsModal
+        visible={leadsModalVisible}
+        onClose={() => setLeadsModalVisible(false)}
+        campaign={selectedCampaignForLeads}
         dismissedLeadIds={dismissedLeadIds}
-        onCall={callLead} 
-        onWhatsApp={chatLead} 
-        markAllRead={markLeadListAsRead} 
+        onCall={callLead}
+        onWhatsApp={chatLead}
+        markAllRead={markLeadListAsRead}
+        theme={theme}
+        isDarkMode={isDarkMode}
       />
 
       {/* NOTIFICATIONS MODAL (NEW LEADS) */}
-      <Modal
-        visible={notificationsModalVisible}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setNotificationsModalVisible(false)}
-      >
-        <View style={styles.notificationsOverlay}>
-          <BlurView intensity={65} tint="light" style={styles.notificationsPanel}>
-            <View style={styles.notificationsHeader}>
-              <LinearGradient colors={['#56CCF2', '#2F80ED']} style={styles.notificationsBell}>
-                <Ionicons name="notifications" size={34} color="#FFFFFF" />
-              </LinearGradient>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.notificationsTitle}>New Leads</Text>
-                <Text style={styles.notificationsSubtitle}>{newLeadsTodayCount} fresh inquiries</Text>
-              </View>
-            </View>
+      {/* =========================================================
+    NOTIFICATIONS MODAL
+    DARK + LIGHT MODE SAFE
+========================================================= */}
 
-            <ScrollView style={styles.leadsScrollView} showsVerticalScrollIndicator={false}>
-              {allNewLeads.length === 0 ? (
-                <View style={styles.emptyNotificationsContainer}>
-                  <BlurView intensity={35} tint="light" style={styles.emptyBellWrap}>
-                    <Ionicons name="notifications-outline" size={54} color="#2563EB" />
-                  </BlurView>
-                  <Text style={styles.emptyNotificationsTitle}>No new notifications.</Text>
-                  <Text style={styles.emptyNotificationsText}>
-                    We'll notify you whenever a buyer shows interest.
-                  </Text>
-                </View>
-              ) : (
-                allNewLeads.map((lead, index) => (
-                  <LeadNotificationCard
-                    key={`new-lead-${lead.id}-${index}`}
-                    lead={lead}
-                    onDismiss={dismissLeadNotification}
-                    onCall={() => callLead(lead)}
-                    onWhatsApp={() => chatLead(lead)}
-                    onView={() => viewLeadDetails(lead)}
-                  />
-                ))
-              )}
-            </ScrollView>
+<Modal
+  visible={notificationsModalVisible}
+  animationType="fade"
+  transparent={true}
+  onRequestClose={() => setNotificationsModalVisible(false)}
+>
+  <View
+    style={[
+      styles.notificationsOverlay,
+      {
+        backgroundColor: isDarkMode
+          ? 'rgba(2, 6, 23, 0.78)'
+          : 'rgba(15, 23, 42, 0.42)',
+      },
+    ]}
+  >
 
-            <View style={styles.notificationsFooter}>
-              <Pressable onPress={() => markLeadListAsRead(allNewLeads)} style={styles.markReadBtn}>
-                <Text style={styles.markReadText}>Mark all as Read</Text>
-              </Pressable>
-              <Pressable onPress={() => setNotificationsModalVisible(false)} style={styles.doneGradientWrap}>
-                <LinearGradient colors={['#2F80ED', '#56CCF2']} style={styles.doneGradientBtn}>
-                  <Text style={styles.doneGradientText}>Done</Text>
-                </LinearGradient>
-              </Pressable>
-            </View>
-          </BlurView>
+    <View
+      style={[
+        styles.notificationsPanel,
+        {
+          backgroundColor: isDarkMode
+            ? '#0F172A'
+            : '#FFFFFF',
+
+          borderColor: isDarkMode
+            ? '#263653'
+            : '#E2E8F0',
+
+          shadowColor: isDarkMode
+            ? '#000000'
+            : '#7C3AED',
+        },
+      ]}
+    >
+
+      {/* HEADER */}
+      <View style={styles.notificationsHeader}>
+
+        <LinearGradient
+          colors={
+            isDarkMode
+              ? ['#8B5CF6', '#4F46E5']
+              : ['#56CCF2', '#2F80ED']
+          }
+          style={styles.notificationsBell}
+        >
+          <Ionicons
+            name="notifications"
+            size={31}
+            color="#FFFFFF"
+          />
+        </LinearGradient>
+
+        <View style={{ flex: 1 }}>
+
+          <Text
+            style={[
+              styles.notificationsTitle,
+              {
+                color: isDarkMode
+                  ? '#F8FAFC'
+                  : '#0F172A',
+              },
+            ]}
+          >
+            New Leads
+          </Text>
+
+          <Text
+            style={[
+              styles.notificationsSubtitle,
+              {
+                color: isDarkMode
+                  ? '#A78BFA'
+                  : '#7C3AED',
+              },
+            ]}
+          >
+            {newLeadsTodayCount} fresh inquiries
+          </Text>
+
         </View>
-      </Modal>
+
+        {/* CLOSE */}
+        <Pressable
+          onPress={() =>
+            setNotificationsModalVisible(false)
+          }
+          style={[
+            styles.notificationCloseButton,
+            {
+              backgroundColor: isDarkMode
+                ? '#17243C'
+                : '#F8FAFC',
+
+              borderColor: isDarkMode
+                ? '#30415F'
+                : '#E2E8F0',
+            },
+          ]}
+        >
+          <Ionicons
+            name="close"
+            size={20}
+            color={
+              isDarkMode
+                ? '#CBD5E1'
+                : '#475569'
+            }
+          />
+        </Pressable>
+
+      </View>
+
+      {/* DIVIDER */}
+      <View
+        style={[
+          styles.notificationDivider,
+          {
+            backgroundColor: isDarkMode
+              ? '#263653'
+              : '#E2E8F0',
+          },
+        ]}
+      />
+
+      {/* CONTENT */}
+      <ScrollView
+        style={styles.leadsScrollView}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          paddingBottom: 8,
+        }}
+      >
+
+        {allNewLeads.length === 0 ? (
+
+          <View style={styles.emptyNotificationsContainer}>
+
+            <View
+              style={[
+                styles.emptyBellWrap,
+                {
+                  backgroundColor: isDarkMode
+                    ? '#17243C'
+                    : '#F8FAFC',
+
+                  borderColor: isDarkMode
+                    ? '#35445F'
+                    : '#E2E8F0',
+                },
+              ]}
+            >
+              <Ionicons
+                name="notifications-outline"
+                size={50}
+                color={
+                  isDarkMode
+                    ? '#A78BFA'
+                    : '#7C3AED'
+                }
+              />
+            </View>
+
+            <Text
+              style={[
+                styles.emptyNotificationsTitle,
+                {
+                  color: isDarkMode
+                    ? '#F8FAFC'
+                    : '#0F172A',
+                },
+              ]}
+            >
+              No new notifications
+            </Text>
+
+            <Text
+              style={[
+                styles.emptyNotificationsText,
+                {
+                  color: isDarkMode
+                    ? '#94A3B8'
+                    : '#64748B',
+                },
+              ]}
+            >
+              We'll notify you whenever a buyer
+              shows interest.
+            </Text>
+
+          </View>
+
+        ) : (
+
+          allNewLeads.map((lead, index) => (
+
+            <LeadNotificationCard
+              key={`new-lead-${lead.id}-${index}`}
+              lead={lead}
+              onDismiss={dismissLeadNotification}
+              onCall={() => callLead(lead)}
+              onWhatsApp={() => chatLead(lead)}
+              onView={() => viewLeadDetails(lead)}
+              theme={theme}
+              isDarkMode={isDarkMode}
+            />
+
+          ))
+
+        )}
+
+      </ScrollView>
+
+      {/* FOOTER */}
+      <View
+        style={[
+          styles.notificationsFooter,
+          {
+            borderTopColor: isDarkMode
+              ? '#263653'
+              : '#E2E8F0',
+          },
+        ]}
+      >
+
+        <Pressable
+          onPress={() =>
+            markLeadListAsRead(allNewLeads)
+          }
+          style={[
+            styles.markReadBtn,
+            {
+              backgroundColor: isDarkMode
+                ? '#17243C'
+                : '#F8FAFC',
+
+              borderColor: isDarkMode
+                ? '#30415F'
+                : '#E2E8F0',
+            },
+          ]}
+        >
+
+          <Ionicons
+            name="checkmark-done-outline"
+            size={17}
+            color={
+              isDarkMode
+                ? '#A78BFA'
+                : '#7C3AED'
+            }
+          />
+
+          <Text
+            style={[
+              styles.markReadText,
+              {
+                color: isDarkMode
+                  ? '#C4B5FD'
+                  : '#7C3AED',
+              },
+            ]}
+          >
+            Mark all as Read
+          </Text>
+
+        </Pressable>
+
+        <Pressable
+          onPress={() =>
+            setNotificationsModalVisible(false)
+          }
+          style={styles.doneGradientWrap}
+        >
+
+          <LinearGradient
+            colors={
+              isDarkMode
+                ? ['#7C3AED', '#4F46E5']
+                : ['#2F80ED', '#56CCF2']
+            }
+            style={styles.doneGradientBtn}
+          >
+
+            <Text style={styles.doneGradientText}>
+              Done
+            </Text>
+
+          </LinearGradient>
+
+        </Pressable>
+
+      </View>
+
+    </View>
+
+  </View>
+</Modal>
 
       <RatingModal
         visible={showRatingModal}
@@ -2764,13 +3369,14 @@ export default function SellerDashboardScreen({ navigation }) {
         userRole="seller"
       />
     </SafeAreaView>
+
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#EDE9FE',
   },
   header: {
     flexDirection: 'row',
@@ -2786,7 +3392,7 @@ const styles = StyleSheet.create({
   logoText: {
     fontWeight: '700',
     fontSize: 24,
-    color: PREMIUM_COLORS.PRIMARY,
+    color: PREMIUM_COLORS.SELLER_PRIMARY,
   },
   headerRight: {
     flexDirection: 'row',
@@ -2820,12 +3426,12 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: COLORS.PRIMARY_LIGHT,
+    backgroundColor: COLORS.SELLER_PRIMARY_LIGHT,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
-    color: PREMIUM_COLORS.PRIMARY,
+    color: PREMIUM_COLORS.SELLER_PRIMARY,
     fontSize: FONT_SIZES.BASE,
     fontWeight: FONT_WEIGHTS.BOLD,
   },
@@ -2840,18 +3446,18 @@ const styles = StyleSheet.create({
 
   // GROWTH STATS HERO BANNER
   growthBanner: {
-    backgroundColor: COLORS.PRIMARY_LIGHT,
+    backgroundColor: COLORS.SELLER_PRIMARY_LIGHT,
     borderRadius: 16,
     paddingVertical: 20,
     paddingHorizontal: 16,
     marginBottom: 24,
     borderWidth: 1,
-    borderColor: COLORS.PRIMARY_ULTRA_LIGHT,
+    borderColor: COLORS.SELLER_PRIMARY_ULTRA_LIGHT,
   },
   growthBannerTitle: {
     fontSize: FONT_SIZES.SM,
     fontWeight: FONT_WEIGHTS.BOLD,
-    color: PREMIUM_COLORS.PRIMARY,
+    color: PREMIUM_COLORS.SELLER_PRIMARY,
     marginBottom: 14,
     textAlign: 'center',
     letterSpacing: 0.5,
@@ -2886,7 +3492,7 @@ const styles = StyleSheet.create({
   growthMonthLabel: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#2563EB',
+    color: '#7C3AED',
     letterSpacing: 1,
     marginBottom: 10,
     marginLeft: 4,
@@ -2904,20 +3510,20 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.7)',
     borderRadius: 16,
     paddingVertical: 12,
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.9)',
-    shadowColor: '#2563EB',
+    shadowColor: '#7C3AED',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
     shadowRadius: 10,
   },
   kpiIcon: {
     fontSize: 20,
-    marginRight: 8,
+    marginRight: 6,
   },
   kpiValue: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: '#0C1445',
   },
@@ -2931,7 +3537,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginBottom: 16,
     overflow: 'hidden',
-    shadowColor: '#2563EB',
+    shadowColor: '#7C3AED',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.2,
     shadowRadius: 15,
@@ -2962,7 +3568,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   glassLaunchBtnText: {
-    color: '#2563EB',
+    color: '#7C3AED',
     fontWeight: '800',
     fontSize: 13,
   },
@@ -3051,7 +3657,7 @@ const styles = StyleSheet.create({
   },
   editLink: {
     fontSize: FONT_SIZES.XS,
-    color: PREMIUM_COLORS.PRIMARY,
+    color: PREMIUM_COLORS.SELLER_PRIMARY,
     fontWeight: FONT_WEIGHTS.SEMIBOLD,
   },
   pastCampaignDesc: {
@@ -3163,7 +3769,7 @@ const styles = StyleSheet.create({
     bottom: 20,
     left: 24,
     right: 24,
-    shadowColor: '#2563EB',
+    shadowColor: '#7C3AED',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.15,
     shadowRadius: 30,
@@ -3273,8 +3879,8 @@ const styles = StyleSheet.create({
     borderColor: '#CBD5E1',
   },
   stepDotActive: {
-    backgroundColor: PREMIUM_COLORS.PRIMARY,
-    borderColor: PREMIUM_COLORS.PRIMARY,
+    backgroundColor: PREMIUM_COLORS.SELLER_PRIMARY,
+    borderColor: PREMIUM_COLORS.SELLER_PRIMARY,
   },
   stepLineTrack: {
     width: 60,
@@ -3286,7 +3892,7 @@ const styles = StyleSheet.create({
   },
   stepLineFill: {
     height: '100%',
-    backgroundColor: PREMIUM_COLORS.PRIMARY,
+    backgroundColor: PREMIUM_COLORS.SELLER_PRIMARY,
     borderRadius: 2,
   },
   stepLabelsRow: {
@@ -3302,7 +3908,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   stepLabelActive: {
-    color: PREMIUM_COLORS.PRIMARY,
+    color: PREMIUM_COLORS.SELLER_PRIMARY,
     fontWeight: FONT_WEIGHTS.BOLD,
   },
   cardInput: {
@@ -3447,15 +4053,15 @@ const styles = StyleSheet.create({
   },
   imageActionBtn: {
     flex: 1,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#EDE9FE',
     borderRadius: 10,
     paddingVertical: 10,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: '#C4B5FD',
   },
   imageActionBtnText: {
-    color: '#2563EB',
+    color: '#7C3AED',
     fontWeight: FONT_WEIGHTS.BOLD,
     fontSize: 12,
   },
@@ -3487,7 +4093,7 @@ const styles = StyleSheet.create({
   },
   citySelectedHint: {
     fontSize: 12,
-    color: '#2563EB',
+    color: '#7C3AED',
     fontWeight: FONT_WEIGHTS.SEMIBOLD,
     marginTop: 8,
   },
@@ -3529,7 +4135,7 @@ const styles = StyleSheet.create({
   },
   calendarNavText: {
     fontSize: 18,
-    color: '#2563EB',
+    color: '#7C3AED',
   },
   calendarMonth: {
     fontWeight: '700',
@@ -3567,7 +4173,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   calendarDaySelected: {
-    backgroundColor: '#2563EB',
+    backgroundColor: '#7C3AED',
   },
   calendarDayText: {
     fontSize: 13,
@@ -3660,13 +4266,14 @@ const styles = StyleSheet.create({
   statsCardPremium: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    paddingVertical: 20,
-    paddingHorizontal: 10,
+    borderRadius: 16,
+    paddingVertical: 18,
+    paddingHorizontal: 12,
+    marginHorizontal: 12,
     shadowColor: '#000',
     shadowOpacity: 0.05,
     shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 15,
+    shadowRadius: 10,
     elevation: 3,
     borderWidth: 1,
     borderColor: '#F1F5F9',
@@ -3872,7 +4479,7 @@ const styles = StyleSheet.create({
   stepLabel: {
     fontSize: FONT_SIZES.XS,
     fontWeight: FONT_WEIGHTS.BOLD,
-    color: PREMIUM_COLORS.PRIMARY,
+    color: PREMIUM_COLORS.SELLER_PRIMARY,
   },
   stepProgressPercentage: {
     fontSize: FONT_SIZES.XS,
@@ -3886,7 +4493,7 @@ const styles = StyleSheet.create({
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: PREMIUM_COLORS.PRIMARY,
+    backgroundColor: PREMIUM_COLORS.SELLER_PRIMARY,
     borderRadius: 3,
   },
   stepContent: {
@@ -3926,8 +4533,8 @@ const styles = StyleSheet.create({
     borderColor: COLORS.BORDER,
   },
   emojiChipSelected: {
-    borderColor: PREMIUM_COLORS.PRIMARY,
-    backgroundColor: COLORS.PRIMARY_LIGHT,
+    borderColor: PREMIUM_COLORS.SELLER_PRIMARY,
+    backgroundColor: COLORS.SELLER_PRIMARY_LIGHT,
   },
   emojiChipText: {
     fontSize: 20,
@@ -3992,8 +4599,8 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   categoryRowItemSelected: {
-    backgroundColor: PREMIUM_COLORS.PRIMARY,
-    borderColor: PREMIUM_COLORS.PRIMARY,
+    backgroundColor: PREMIUM_COLORS.SELLER_PRIMARY,
+    borderColor: PREMIUM_COLORS.SELLER_PRIMARY,
   },
   categoryRowText: {
     fontSize: FONT_SIZES.SM,
@@ -4054,7 +4661,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   uploadAddTileText: {
-    color: COLORS.PRIMARY,
+    color: COLORS.SELLER_PRIMARY,
     fontWeight: FONT_WEIGHTS.BOLD,
     fontSize: FONT_SIZES.SM,
     textAlign: 'center',
@@ -4068,8 +4675,8 @@ const styles = StyleSheet.create({
     borderColor: COLORS.BORDER,
   },
   categoryChipSelected: {
-    backgroundColor: PREMIUM_COLORS.PRIMARY,
-    borderColor: PREMIUM_COLORS.PRIMARY,
+    backgroundColor: PREMIUM_COLORS.SELLER_PRIMARY,
+    borderColor: PREMIUM_COLORS.SELLER_PRIMARY,
   },
   categoryChipText: {
     fontSize: FONT_SIZES.XS,
@@ -4087,7 +4694,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 2,
     borderColor: PREMIUM_COLORS.SECONDARY,
-    shadowColor: PREMIUM_COLORS.PRIMARY,
+    shadowColor: PREMIUM_COLORS.SELLER_PRIMARY,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
@@ -4109,7 +4716,7 @@ const styles = StyleSheet.create({
   },
   livePreviewOffer: {
     fontSize: FONT_SIZES.SM,
-    color: PREMIUM_COLORS.PRIMARY,
+    color: PREMIUM_COLORS.SELLER_PRIMARY,
     fontWeight: FONT_WEIGHTS.SEMIBOLD,
     marginTop: 2,
   },
@@ -4122,7 +4729,7 @@ const styles = StyleSheet.create({
     flex: 2,
     height: 50,
     borderRadius: 12,
-    backgroundColor: PREMIUM_COLORS.PRIMARY,
+    backgroundColor: PREMIUM_COLORS.SELLER_PRIMARY,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -4139,7 +4746,7 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.SM,
     fontWeight: FONT_WEIGHTS.BOLD,
   },
-  
+
   // NEW SORT UI STYLES
   campaignSectionHeaderRow: {
     flexDirection: 'row',
@@ -4182,7 +4789,7 @@ const styles = StyleSheet.create({
     fontWeight: FONT_WEIGHTS.MEDIUM,
   },
   sortBtnTextActive: {
-    color: PREMIUM_COLORS.PRIMARY,
+    color: PREMIUM_COLORS.SELLER_PRIMARY,
     fontWeight: FONT_WEIGHTS.BOLD,
   },
   premiumModalButtonRow: {
@@ -4269,6 +4876,41 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.SM,
   },
 
+  premiumModalButtonRow: {
+    flexDirection: 'row',
+    marginTop: 20,
+    gap: 12,
+  },
+  modalBackBtn: {
+    flex: 1,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: 50,
+  },
+  modalBackText: {
+    color: '#475569',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  publishActionBtn: {
+    flex: 2,
+    backgroundColor: '#7C3AED',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: 50,
+  },
+  publishActionBtnText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  publishActionBtnDisabled: {
+    opacity: 0.6,
+  },
+
   // LEADS VIEW MODAL SPECIFICS
   leadsScrollView: {
     marginVertical: 12,
@@ -4310,7 +4952,7 @@ const styles = StyleSheet.create({
     fontWeight: FONT_WEIGHTS.BOLD,
   },
   closeLeadsBtn: {
-    backgroundColor: PREMIUM_COLORS.PRIMARY,
+    backgroundColor: PREMIUM_COLORS.SELLER_PRIMARY,
     borderRadius: 12,
     height: 50,
     justifyContent: 'center',
@@ -4335,7 +4977,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.95)',
     borderWidth: 1,
     borderColor: 'rgba(203,213,225,0.48)',
-    shadowColor: '#2563EB',
+    shadowColor: '#7C3AED',
     shadowOffset: { width: 0, height: 18 },
     shadowOpacity: 0.18,
     shadowRadius: 36,
@@ -4354,7 +4996,7 @@ const styles = StyleSheet.create({
     borderRadius: 33,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#2563EB',
+    shadowColor: '#7C3AED',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.28,
     shadowRadius: 18,
@@ -4367,7 +5009,7 @@ const styles = StyleSheet.create({
   },
   notificationsSubtitle: {
     fontSize: 14,
-    color: '#2563EB',
+    color: '#7C3AED',
     fontWeight: '700',
     marginTop: 2,
   },
@@ -4452,7 +5094,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: 'rgba(219,234,254,0.82)',
     borderWidth: 1,
-    borderColor: 'rgba(37,99,235,0.22)',
+    borderColor: 'rgba(124, 58, 237,0.22)',
     overflow: 'hidden',
   },
   newLeadDot: {
@@ -4462,7 +5104,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#22C55E',
   },
   newLeadBadgeText: {
-    color: '#2563EB',
+    color: '#7C3AED',
     fontSize: 11,
     fontWeight: '900',
   },
@@ -4512,7 +5154,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.62)',
   },
   markReadText: {
-    color: '#2563EB',
+    color: '#7C3AED',
     fontSize: 13,
     fontWeight: '900',
   },
@@ -4520,7 +5162,7 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 18,
     overflow: 'hidden',
-    shadowColor: '#2563EB',
+    shadowColor: '#7C3AED',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.24,
     shadowRadius: 18,
@@ -4552,7 +5194,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.62)',
     borderWidth: 1,
-    borderColor: 'rgba(37,99,235,0.14)',
+    borderColor: 'rgba(124, 58, 237,0.14)',
     overflow: 'hidden',
     marginBottom: 8,
   },
@@ -4616,14 +5258,14 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   planCardFeatured: {
-    borderColor: PREMIUM_COLORS.PRIMARY,
+    borderColor: PREMIUM_COLORS.SELLER_PRIMARY,
     borderWidth: 2,
   },
   featuredBadge: {
     position: 'absolute',
     top: -12,
     right: 20,
-    backgroundColor: PREMIUM_COLORS.PRIMARY,
+    backgroundColor: PREMIUM_COLORS.SELLER_PRIMARY,
     borderRadius: 8,
     paddingVertical: 4,
     paddingHorizontal: 10,
@@ -4645,7 +5287,7 @@ const styles = StyleSheet.create({
     color: COLORS.TEXT_PRIMARY,
   },
   planNameFeatured: {
-    color: PREMIUM_COLORS.PRIMARY,
+    color: PREMIUM_COLORS.SELLER_PRIMARY,
   },
   planPrice: {
     fontSize: FONT_SIZES.LG,
@@ -4653,7 +5295,7 @@ const styles = StyleSheet.create({
     color: COLORS.TEXT_PRIMARY,
   },
   planPriceFeatured: {
-    color: PREMIUM_COLORS.PRIMARY,
+    color: PREMIUM_COLORS.SELLER_PRIMARY,
   },
   planPricePeriod: {
     fontSize: FONT_SIZES.XS,
@@ -4662,7 +5304,7 @@ const styles = StyleSheet.create({
   },
   planPricePeriodFeatured: {
     fontSize: FONT_SIZES.XS,
-    color: COLORS.PRIMARY_LIGHT,
+    color: COLORS.SELLER_PRIMARY_LIGHT,
   },
   planDesc: {
     fontSize: FONT_SIZES.XS,
@@ -4671,7 +5313,7 @@ const styles = StyleSheet.create({
   },
   planDescFeatured: {
     fontSize: FONT_SIZES.XS,
-    color: PREMIUM_COLORS.PRIMARY,
+    color: PREMIUM_COLORS.SELLER_PRIMARY,
     marginBottom: 14,
   },
   planDivider: {
@@ -4709,7 +5351,7 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.SM,
   },
   planBtnUpgrade: {
-    backgroundColor: PREMIUM_COLORS.PRIMARY,
+    backgroundColor: PREMIUM_COLORS.SELLER_PRIMARY,
   },
   planBtnTextUpgrade: {
     color: COLORS.WHITE,
@@ -4727,10 +5369,10 @@ const styles = StyleSheet.create({
   planBtnContact: {
     backgroundColor: COLORS.WHITE,
     borderWidth: 1.5,
-    borderColor: PREMIUM_COLORS.PRIMARY,
+    borderColor: PREMIUM_COLORS.SELLER_PRIMARY,
   },
   planBtnTextContact: {
-    color: PREMIUM_COLORS.PRIMARY,
+    color: PREMIUM_COLORS.SELLER_PRIMARY,
     fontWeight: FONT_WEIGHTS.BOLD,
     fontSize: FONT_SIZES.SM,
   },
@@ -4742,13 +5384,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.55)',
     borderRadius: 18,
     borderWidth: 1.5,
-    borderColor: 'rgba(37,99,235,0.18)',
+    borderColor: 'rgba(124, 58, 237,0.18)',
     paddingHorizontal: 14,
     paddingVertical: 14,
     marginVertical: 12,
     overflow: 'hidden',
     minHeight: 56,
-    shadowColor: '#2563EB',
+    shadowColor: '#7C3AED',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.07,
     shadowRadius: 12,
@@ -4775,8 +5417,8 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1.5,
-    borderColor: 'rgba(37,99,235,0.35)',
-    shadowColor: '#2563EB',
+    borderColor: 'rgba(124, 58, 237,0.35)',
+    shadowColor: '#7C3AED',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.15,
     shadowRadius: 14,
@@ -4802,87 +5444,96 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     flexShrink: 1,
   },
-  
+
   // --- SELLER PROFILE REDESIGN STYLES ---
   sellerProfileScrollContent: {
-    paddingBottom: 120,
-  },
-  sellerProfileHeaderMinimal: {
-    paddingVertical: 20,
-    paddingHorizontal: 16,
-    backgroundColor: '#F8FAFC',
+    paddingBottom: 140,
   },
   sellerProfileGlassCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.85)',
-    borderRadius: 24,
-    paddingVertical: 28,
-    paddingHorizontal: 20,
+    flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.9)',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.04,
-    shadowRadius: 16,
+    borderRadius: 16,
+    paddingVertical: 18,
+    paddingHorizontal: 16,
+    marginHorizontal: 12,
+    marginTop: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
     elevation: 3,
   },
   sellerAvatarContainer: {
     position: 'relative',
-    marginBottom: 14,
+    flexShrink: 0,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
     elevation: 4,
   },
   sellerAvatarImage: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    borderWidth: 2.5,
   },
   sellerAvatarFallback: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    backgroundColor: '#EFF6FF',
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    borderWidth: 2.5,
     justifyContent: 'center',
     alignItems: 'center',
   },
   sellerAvatarFallbackText: {
-    fontSize: 40,
+    fontSize: 34,
     fontWeight: '800',
-    color: '#2563EB',
   },
   sellerCameraIconBadge: {
     position: 'absolute',
-    bottom: 2,
-    right: 2,
-    backgroundColor: '#2563EB',
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    bottom: 0,
+    right: 0,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+  },
+  sellerProfileTextBlock: {
+    flex: 1,
+    marginLeft: 16,
+    minWidth: 0,
+    justifyContent: 'center',
+  },
+  sellerVerifiedBadge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginTop: 6,
+    gap: 4,
+  },
+  sellerVerifiedText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
   sellerProfileNameTextMinimal: {
-    fontSize: 26,
+    fontSize: 22,
     fontWeight: '800',
-    color: '#1E293B',
-    marginTop: 12,
-    textAlign: 'center',
+    flexShrink: 1,
+    marginBottom: 2,
   },
   sellerBusinessNameTextMinimal: {
-    fontSize: 15,
-    color: '#64748B',
-    fontWeight: '600',
-    marginTop: 4,
-    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: '500',
+    flexShrink: 1,
+    marginBottom: 4,
   },
   statIconBadge: {
     width: 38,
@@ -4894,33 +5545,30 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   sellerSettingsCard: {
-    margin: 16,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 20,
-    shadowColor: '#000',
+    marginHorizontal: 12,
+    marginBottom: 12,
+    borderRadius: 16,
+    padding: 16,
+    paddingTop: 18,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
+    shadowOpacity: 0.06,
     shadowRadius: 12,
     elevation: 2,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
   },
   sellerCardHeaderTitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: FONT_WEIGHTS.BOLD,
-    color: '#1E293B',
-    marginBottom: 16,
+    marginBottom: 4,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 1.2,
   },
   sellerOptionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 14,
+    paddingVertical: 13,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
   },
   sellerOptionPressed: {
     opacity: 0.7,
@@ -4929,35 +5577,36 @@ const styles = StyleSheet.create({
   sellerOptionLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
+    minWidth: 0,
   },
-  sellerOptionIcon: {
+  sellerOptionIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 12,
-    backgroundColor: '#EFF6FF',
-    padding: 8,
-    borderRadius: 10,
-    overflow: 'hidden',
+    flexShrink: 0,
   },
   sellerOptionLabelText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#334155',
+    flexShrink: 1,
   },
   sellerLogoutSection: {
-    marginHorizontal: 16,
-    marginBottom: 20,
+    marginHorizontal: 12,
+    marginBottom: 24,
   },
   sellerLogoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#FCA5A5',
     paddingVertical: 14,
-    borderRadius: 20,
-    shadowColor: '#EF4444',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
+    borderRadius: 16,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
     shadowRadius: 8,
     elevation: 1,
   },
@@ -4966,7 +5615,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: FONT_WEIGHTS.BOLD,
   },
-  
+
   // --- TARGET CITIES MULTI-SELECT STYLES ---
   allIndiaBtn: {
     flexDirection: 'row',
@@ -4976,19 +5625,19 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: '#2563EB',
-    backgroundColor: '#EFF6FF',
+    borderColor: '#7C3AED',
+    backgroundColor: '#EDE9FE',
     marginTop: 4,
     marginBottom: 8,
   },
   allIndiaBtnActive: {
-    backgroundColor: '#2563EB',
-    borderColor: '#2563EB',
+    backgroundColor: '#7C3AED',
+    borderColor: '#7C3AED',
   },
   allIndiaBtnText: {
     fontSize: FONT_SIZES.SM,
     fontWeight: FONT_WEIGHTS.SEMIBOLD,
-    color: '#2563EB',
+    color: '#7C3AED',
   },
   allIndiaBtnTextActive: {
     color: '#FFFFFF',
@@ -5003,9 +5652,9 @@ const styles = StyleSheet.create({
   cityTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#EDE9FE',
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: '#C4B5FD',
     borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -5069,7 +5718,7 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.SM,
     color: '#0F172A',
   },
-  
+
   // --- INLINE LOCATION SEARCH STYLES ---
   inlineLocationSearchBar: {
     flexDirection: 'row',
@@ -5120,7 +5769,7 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
 
-  // ── Seller New Message Notification Styles ─────────────────────────────
+  // â”€â”€ Seller New Message Notification Styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   sellerMsgNotifContainer: {
     position: 'absolute',
     top: 0,
@@ -5224,8 +5873,8 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   crmFilterChipActive: {
-    backgroundColor: 'rgba(59,130,246,0.08)',
-    borderColor: 'rgba(59,130,246,0.3)',
+    backgroundColor: 'rgba(139, 92, 246,0.08)',
+    borderColor: 'rgba(139, 92, 246,0.3)',
   },
   crmFilterText: {
     fontSize: 14,
@@ -5233,7 +5882,7 @@ const styles = StyleSheet.create({
     color: '#475569',
   },
   crmFilterTextActive: {
-    color: '#2563EB',
+    color: '#7C3AED',
   },
   crmListContainer: {
     padding: 16,
@@ -5381,6 +6030,6 @@ const styles = StyleSheet.create({
   crmMarkReadText: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#2563EB',
+    color: '#7C3AED',
   },
 });

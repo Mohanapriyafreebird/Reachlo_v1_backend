@@ -6,146 +6,449 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  TouchableWithoutFeedback,
   Keyboard,
   Pressable,
   TextInput,
+  StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import COLORS from '../constants/colors';
-import { FONT_SIZES, FONT_WEIGHTS } from '../constants/typography';
-import PrimaryButton from '../components/PrimaryButton';
+import { LinearGradient } from 'expo-linear-gradient';
+
+import { FONT_WEIGHTS } from '../constants/typography';
 import Toast from '../components/Toast';
 import { useAuth } from '../context/AuthContext';
 
-// Step indicator pill (reusable inline)
-function StepPill({ step, label, active }) {
+
+// =====================================================
+// COLORS
+// =====================================================
+
+const PURPLE = '#7C3AED';
+const PURPLE_DARK = '#5B21B6';
+const PURPLE_LIGHT = '#F3EEFF';
+
+const TEXT_PRIMARY = '#171329';
+const TEXT_SECONDARY = '#6B647D';
+const TEXT_MUTED = '#9690A3';
+
+const BORDER = '#E8E2F2';
+const INPUT_BG = '#FBFAFD';
+
+const ERROR = '#DC2626';
+
+
+// =====================================================
+// STEP INDICATOR
+// =====================================================
+
+function StepIndicator() {
   return (
-    <View style={styles.stepPillWrapper}>
-      <View style={[styles.stepPill, active ? styles.stepPillActive : styles.stepPillInactive]}>
-        <Text style={[styles.stepPillText, active ? styles.stepPillTextActive : styles.stepPillTextInactive]}>
-          {step}
+    <View style={styles.stepIndicator}>
+
+      {/* Step 1 - completed */}
+
+      <View style={styles.stepItem}>
+
+        <View style={styles.stepCircleCompleted}>
+          <Ionicons
+            name="checkmark"
+            size={18}
+            color={PURPLE}
+          />
+        </View>
+
+        <Text style={styles.stepLabelCompleted}>
+          Personal
         </Text>
+
       </View>
-      <Text style={[styles.stepLabel, active ? styles.stepLabelActive : styles.stepLabelInactive]}>
-        {label}
-      </Text>
+
+
+      {/* Connector */}
+
+      <View style={styles.stepConnectorActive} />
+
+
+      {/* Step 2 */}
+
+      <View style={styles.stepItem}>
+
+        <View style={styles.stepCircleActive}>
+          <Text style={styles.stepNumberActive}>
+            2
+          </Text>
+        </View>
+
+        <Text style={styles.stepLabelActive}>
+          Business
+        </Text>
+
+      </View>
+
     </View>
   );
 }
 
-export default function SellerRegisterStep2Screen({ route, navigation }) {
+
+// =====================================================
+// FORM INPUT
+// =====================================================
+
+function FormInput({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  error,
+  multiline = false,
+  numberOfLines = 1,
+  autoCapitalize = 'sentences',
+}) {
+
+  const [focused, setFocused] = useState(false);
+
+  return (
+    <View style={styles.inputGroup}>
+
+      <Text style={styles.inputLabel}>
+        {label}
+      </Text>
+
+      <View
+        style={[
+          styles.inputContainer,
+          multiline && styles.textAreaContainer,
+          focused && styles.inputContainerFocused,
+          error && styles.inputContainerError,
+        ]}
+      >
+
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor="#AAA3B8"
+          multiline={multiline}
+          numberOfLines={numberOfLines}
+          textAlignVertical={multiline ? 'top' : 'center'}
+          autoCapitalize={autoCapitalize}
+          editable={true}
+          style={[
+            styles.textInput,
+            multiline && styles.textAreaInput,
+          ]}
+          selectionColor={PURPLE}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+        />
+
+      </View>
+
+      {error ? (
+        <View style={styles.errorRow}>
+
+          <Ionicons
+            name="alert-circle-outline"
+            size={14}
+            color={ERROR}
+          />
+
+          <Text style={styles.errorText}>
+            {error}
+          </Text>
+
+        </View>
+      ) : null}
+
+    </View>
+  );
+}
+
+
+// =====================================================
+// MAIN SCREEN
+// =====================================================
+
+export default function SellerRegisterStep2Screen({
+  route,
+  navigation,
+}) {
+
   const { step1Data } = route.params || {};
+
   const { register } = useAuth();
 
+
+  // ---------------------------------------------------
+  // FORM STATE
+  // ---------------------------------------------------
+
   const [businessName, setBusinessName] = useState('');
-  const [businessDescription, setBusinessDescription] = useState(''); // "What does your business provide?"
-  const [usp, setUsp] = useState('');  // "What makes you different?"
+  const [businessDescription, setBusinessDescription] = useState('');
+  const [usp, setUsp] = useState('');
+
+
+  // ---------------------------------------------------
+  // VALIDATION
+  // ---------------------------------------------------
 
   const [errors, setErrors] = useState({});
+
+
+  // ---------------------------------------------------
+  // LOADING
+  // ---------------------------------------------------
+
   const [loading, setLoading] = useState(false);
 
-  // USP nudge state (amber info bar when USP left empty on submit attempt)
+
+  // ---------------------------------------------------
+  // USP NUDGE
+  // ---------------------------------------------------
+
   const [showUspNudge, setShowUspNudge] = useState(false);
   const [uspNudgeDismissed, setUspNudgeDismissed] = useState(false);
+
+
+  // ---------------------------------------------------
+  // TOAST
+  // ---------------------------------------------------
 
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState('info');
 
+
+  // ---------------------------------------------------
+  // REFS
+  // ---------------------------------------------------
+
   const scrollRef = useRef(null);
   const layouts = useRef({});
 
-  const showToast = (msg, type = 'error') => {
-    setToastMessage(msg);
+
+  // ---------------------------------------------------
+  // TOAST
+  // ---------------------------------------------------
+
+  const showToast = (message, type = 'error') => {
+    setToastMessage(message);
     setToastType(type);
     setToastVisible(true);
   };
 
-  const handleLayout = (field, e) => {
-    layouts.current[field] = e.nativeEvent.layout.y;
+
+  // ---------------------------------------------------
+  // LAYOUT
+  // ---------------------------------------------------
+
+  const handleLayout = (field, event) => {
+    layouts.current[field] = event.nativeEvent.layout.y;
   };
 
+
+  // ---------------------------------------------------
+  // CLEAR ERROR
+  // ---------------------------------------------------
+
+  const clearError = (field) => {
+
+    if (errors[field]) {
+
+      setErrors((previous) => ({
+        ...previous,
+        [field]: null,
+      }));
+
+    }
+  };
+
+
+  // ---------------------------------------------------
+  // VALIDATE
+  // ---------------------------------------------------
+
   const validate = () => {
+
     const errs = {};
 
+
     if (!businessName.trim()) {
-      errs.businessName = 'Business or company name is required';
+      errs.businessName =
+        'Business or company name is required';
     }
 
+
     if (!businessDescription.trim()) {
-      errs.businessDescription = 'Please describe what your business provides';
+
+      errs.businessDescription =
+        'Please describe what your business provides';
+
     } else if (businessDescription.trim().length < 20) {
-      errs.businessDescription = 'Please write at least 20 characters';
+
+      errs.businessDescription =
+        'Please write at least 20 characters';
+
     }
+
 
     setErrors(errs);
 
-    // USP nudge (non-blocking) — show once if USP is empty
+
+    // Optional USP suggestion
+
     if (!usp.trim() && !uspNudgeDismissed) {
       setShowUspNudge(true);
     }
 
-    const firstErr = Object.keys(errs)[0];
-    if (firstErr && layouts.current[firstErr] !== undefined && scrollRef.current) {
-      scrollRef.current.scrollTo({ y: Math.max(0, layouts.current[firstErr] - 20), animated: true });
+
+    // Scroll to first error
+
+    const firstError = Object.keys(errs)[0];
+
+    if (
+      firstError &&
+      layouts.current[firstError] !== undefined &&
+      scrollRef.current
+    ) {
+
+      scrollRef.current.scrollTo({
+        y: Math.max(
+          0,
+          layouts.current[firstError] - 20
+        ),
+        animated: true,
+      });
+
     }
+
+
     return Object.keys(errs).length === 0;
   };
 
-  const handleCreateAccount = async () => {
-    Keyboard.dismiss();
-    if (!validate()) return;
 
-    // USP is optional — do NOT block registration if the nudge is showing.
-    // The nudge is purely informational; dismiss it silently and proceed.
-    if (showUspNudge) setShowUspNudge(false);
+  // ---------------------------------------------------
+  // CREATE ACCOUNT
+  // ---------------------------------------------------
+
+  const handleCreateAccount = async () => {
+
+    Keyboard.dismiss();
+
+    if (!validate()) {
+      return;
+    }
+
+
+    if (showUspNudge) {
+      setShowUspNudge(false);
+    }
+
 
     setLoading(true);
-    try {
-      // One combined API call with Step 1 + Step 2 data — no orphaned records
-      const registrationPayload = {
-        // Step 1 personal details
-        name: step1Data.name,
-        email: step1Data.email,
-        phone: step1Data.phone,
-        password: step1Data.password,
-        role: 'SELLER',
-        city: step1Data.city || 'Unknown',
 
-        // Step 2 business details
+
+    try {
+
+      /*
+       * IMPORTANT:
+       * Step 1 and Step 2 are submitted together.
+       */
+
+      const registrationPayload = {
+
+        // Step 1
+        name: step1Data?.name,
+        email: step1Data?.email,
+        phone: step1Data?.phone,
+        password: step1Data?.password,
+
+        role: 'SELLER',
+
+        city: step1Data?.city || 'Unknown',
+
+
+        // Step 2
         company_name: businessName.trim(),
-        // business_description: what the business provides — stored in businesses.business_description
-        // DISTINCT from campaigns.description which is per-campaign marketing copy
-        business_description: businessDescription.trim(),
+
+        business_description:
+          businessDescription.trim(),
+
         usp: usp.trim() || null,
       };
 
-      const response = await register(registrationPayload);
+
+      const response = await register(
+        registrationPayload
+      );
+
 
       if (response.role === 'SELLER') {
+
         navigation.replace('SellerDashboard');
+
       } else {
+
         navigation.replace('DiscoveryFeed');
+
       }
+
     } catch (err) {
-      const msg = err.message || '';
-      // Show specific error messages for duplicate email/phone
-      if (msg.toLowerCase().includes('email')) {
-        showToast('This email address is already registered. Please go back and use a different email.', 'error');
-      } else if (msg.toLowerCase().includes('mobile') || msg.toLowerCase().includes('phone') || msg.toLowerCase().includes('number')) {
-        showToast('This mobile number is already registered. Please go back and use a different number.', 'error');
+
+      const msg = err?.message || '';
+
+      const lowerMsg = msg.toLowerCase();
+
+
+      if (lowerMsg.includes('email')) {
+
+        showToast(
+          'This email address is already registered. Please go back and use a different email.',
+          'error'
+        );
+
+      } else if (
+        lowerMsg.includes('mobile') ||
+        lowerMsg.includes('phone') ||
+        lowerMsg.includes('number')
+      ) {
+
+        showToast(
+          'This mobile number is already registered. Please go back and use a different number.',
+          'error'
+        );
+
       } else {
-        showToast(msg || 'Registration failed. Please try again.', 'error');
+
+        showToast(
+          msg || 'Registration failed. Please try again.',
+          'error'
+        );
+
       }
+
     } finally {
+
       setLoading(false);
+
     }
   };
 
+
+  // ===================================================
+  // UI
+  // ===================================================
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.safeArea}>
+
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor={PURPLE_DARK}
+      />
+
+
       <Toast
         visible={toastVisible}
         message={toastMessage}
@@ -153,328 +456,959 @@ export default function SellerRegisterStep2Screen({ route, navigation }) {
         onHide={() => setToastVisible(false)}
       />
 
+
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
+        behavior={
+          Platform.OS === 'ios'
+            ? 'padding'
+            : 'height'
+        }
+        style={styles.keyboardContainer}
       >
+
         <ScrollView
           ref={scrollRef}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
-          <View style={styles.header}>
-            {/* Back arrow — returns to Step 1 with all Step 1 fields still intact */}
-            <Pressable onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={12}>
-              <Ionicons name="arrow-back" size={22} color={COLORS.WHITE} />
+
+
+          {/* ==========================================
+              HEADER
+          ========================================== */}
+
+          <LinearGradient
+            colors={[
+              '#6D28D9',
+              '#7C3AED',
+              '#8B5CF6',
+            ]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.header}
+          >
+
+            {/* Decorative circles */}
+
+            <View style={styles.decorCircleOne} />
+
+            <View style={styles.decorCircleTwo} />
+
+
+            {/* Back */}
+
+            <Pressable
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+              hitSlop={10}
+            >
+
+              <Ionicons
+                name="arrow-back"
+                size={22}
+                color="#FFFFFF"
+              />
+
             </Pressable>
 
-            <Text style={styles.logoText}>REACHLO</Text>
 
-            {/* Step indicator */}
-            <View style={styles.stepIndicator}>
-              <StepPill step="1" label="Personal" active={false} />
-              <View style={styles.stepConnector} />
-              <StepPill step="2" label="Business" active={true} />
+            {/* Logo */}
+
+            <Text style={styles.logo}>
+              REACHLO
+            </Text>
+
+
+            {/* Title */}
+
+            <Text style={styles.headerTitle}>
+              Tell us about your business
+            </Text>
+
+            <Text style={styles.headerSubtitle}>
+              Complete your business profile to finish registration
+            </Text>
+
+
+            {/* Steps */}
+
+            <StepIndicator />
+
+          </LinearGradient>
+
+
+          {/* ==========================================
+              FORM CARD
+          ========================================== */}
+
+          <View style={styles.formCard}>
+
+
+            {/* Card Header */}
+
+            <View style={styles.cardHeader}>
+
+              <View style={styles.cardIcon}>
+                <Ionicons
+                  name="business-outline"
+                  size={22}
+                  color={PURPLE}
+                />
+              </View>
+
+              <View style={styles.cardHeaderText}>
+
+                <Text style={styles.cardTitle}>
+                  Business details
+                </Text>
+
+                
+
+              </View>
+
             </View>
 
-            <Text style={styles.title}>Tell us about your business</Text>
-            <Text style={styles.subtitle}>Step 2 of 2 — Business details</Text>
-          </View>
 
-          {/* Form card */}
-          <View style={styles.card}>
+            {/* ========================================
+                BUSINESS NAME
+            ======================================== */}
 
-            {/* Business Name */}
-            <View onLayout={(e) => handleLayout('businessName', e)}>
-              <Text style={styles.fieldLabel}>Business or company name <Text style={styles.required}>*</Text></Text>
-              <TextInput
-                style={[styles.textInput, errors.businessName ? styles.textInputError : null]}
-                placeholder="e.g. QuickFix IT Solutions"
-                placeholderTextColor={COLORS.TEXT_PLACEHOLDER}
-                value={businessName}
-                onChangeText={(t) => {
-                  setBusinessName(t);
-                  if (errors.businessName) setErrors(p => ({ ...p, businessName: null }));
-                }}
-                autoCapitalize="words"
-                editable={!loading}
-              />
-              {errors.businessName && <Text style={styles.errorText}>{errors.businessName}</Text>}
-            </View>
+            <View
+              onLayout={(event) =>
+                handleLayout(
+                  'businessName',
+                  event
+                )
+              }
+            >
 
-            {/* Business Description — "What does your business provide?" */}
-            <View onLayout={(e) => handleLayout('businessDescription', e)}>
-              <Text style={styles.fieldLabel}>What does your business provide? <Text style={styles.required}>*</Text></Text>
-              <TextInput
-                style={[styles.textInput, styles.textAreaInput, errors.businessDescription ? styles.textInputError : null]}
-                placeholder={
-                  'Describe your products or services in a few sentences.\ne.g. We provide same-day on-site laptop and network repair for small offices in Chennai.'
+              <FormInput
+                label={
+                  <>
+                    Business or company name{' '}
+                    <Text style={styles.required}>
+                      *
+                    </Text>
+                  </>
                 }
-                placeholderTextColor={COLORS.TEXT_PLACEHOLDER}
-                value={businessDescription}
-                onChangeText={(t) => {
-                  setBusinessDescription(t);
-                  if (errors.businessDescription) setErrors(p => ({ ...p, businessDescription: null }));
+                value={businessName}
+                onChangeText={(text) => {
+                  setBusinessName(text);
+                  clearError('businessName');
                 }}
+                placeholder="e.g. QuickFix IT Solutions"
+                error={errors.businessName}
+                autoCapitalize="words"
+              />
+
+            </View>
+
+
+            {/* ========================================
+                DESCRIPTION
+            ======================================== */}
+
+            <View
+              onLayout={(event) =>
+                handleLayout(
+                  'businessDescription',
+                  event
+                )
+              }
+            >
+
+              <FormInput
+                label={
+                  <>
+                    What does your business provide?{' '}
+                    <Text style={styles.required}>
+                      *
+                    </Text>
+                  </>
+                }
+                value={businessDescription}
+                onChangeText={(text) => {
+                  setBusinessDescription(text);
+                  clearError('businessDescription');
+                }}
+                placeholder={
+                  'Describe your products or services in a few sentences.'
+                }
+                error={errors.businessDescription}
+                multiline
+                numberOfLines={5}
+              />
+
+              <View style={styles.helperRow}>
+
+                <Ionicons
+                  name="sparkles-outline"
+                  size={14}
+                  color={PURPLE}
+                />
+
+                <Text style={styles.helperText}>
+                  Write naturally — our AI uses this to understand your business.
+                </Text>
+
+              </View>
+
+            </View>
+
+
+            {/* ========================================
+                USP
+            ======================================== */}
+
+            <View
+              onLayout={(event) =>
+                handleLayout(
+                  'usp',
+                  event
+                )
+              }
+            >
+
+              <FormInput
+                label={
+                  <>
+                    What makes you different?{' '}
+                    <Text style={styles.optionalText}>
+                      Optional
+                    </Text>
+                  </>
+                }
+                value={usp}
+                onChangeText={(text) => {
+
+                  setUsp(text);
+
+                  if (showUspNudge) {
+                    setShowUspNudge(false);
+                  }
+
+                }}
+                placeholder={
+                  'e.g. Same-day service, personalised support, free delivery...'
+                }
                 multiline
                 numberOfLines={4}
-                textAlignVertical="top"
-                editable={!loading}
               />
-              <Text style={styles.helperText}>Write naturally — our AI reads this to understand your business</Text>
-              {errors.businessDescription && <Text style={styles.errorText}>{errors.businessDescription}</Text>}
+
+              <Text style={styles.helperTextPlain}>
+                A strong USP helps your AI create more specific campaigns.
+              </Text>
+
             </View>
 
-            {/* USP — Optional */}
-            <View onLayout={(e) => handleLayout('usp', e)}>
-              <Text style={styles.fieldLabel}>
-                What makes you different?{' '}
-                <Text style={styles.optionalTag}>(optional)</Text>
-              </Text>
-              <TextInput
-                style={[styles.textInput, styles.textAreaInputSmall]}
-                placeholder="e.g. We come to your office — same-day on-site service, no pickup needed."
-                placeholderTextColor={COLORS.TEXT_PLACEHOLDER}
-                value={usp}
-                onChangeText={(t) => {
-                  setUsp(t);
-                  if (showUspNudge) setShowUspNudge(false);
-                }}
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-                editable={!loading}
-              />
-              <Text style={styles.helperText}>
-                This is the single most powerful personalisation input for your AI campaigns
-              </Text>
-            </View>
 
-            {/* USP amber nudge (non-blocking info bar) */}
+            {/* ========================================
+                USP NUDGE
+            ======================================== */}
+
             {showUspNudge && !uspNudgeDismissed && (
+
               <View style={styles.uspNudge}>
-                <Ionicons name="information-circle" size={16} color="#B45309" style={{ marginRight: 8, marginTop: 1 }} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.uspNudgeText}>
-                    Sellers who fill this get noticeably more specific AI campaigns. Add it now?
-                  </Text>
-                  <View style={styles.uspNudgeActions}>
-                    <Pressable
-                      onPress={() => {
-                        setShowUspNudge(false);
-                        scrollRef.current?.scrollTo({ y: layouts.current['usp'] || 0, animated: true });
-                      }}
-                    >
-                      <Text style={styles.uspNudgeAdd}>Add USP</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => {
-                        setShowUspNudge(false);
-                        setUspNudgeDismissed(true);
-                        // Re-trigger submit
-                        setTimeout(() => handleCreateAccount(), 50);
-                      }}
-                    >
-                      <Text style={styles.uspNudgeSkip}>Skip for now</Text>
-                    </Pressable>
-                  </View>
+
+                <View style={styles.nudgeIcon}>
+
+                  <Ionicons
+                    name="bulb-outline"
+                    size={18}
+                    color="#B45309"
+                  />
+
                 </View>
+
+
+                <View style={styles.nudgeContent}>
+
+                  <Text style={styles.nudgeTitle}>
+                    Make your campaigns more specific
+                  </Text>
+
+                  <Text style={styles.nudgeText}>
+                    Adding your USP helps AI understand what makes your business special.
+                  </Text>
+
+
+                  <View style={styles.nudgeActions}>
+
+                    <Pressable
+                      onPress={() => {
+
+                        setShowUspNudge(false);
+
+                        scrollRef.current?.scrollTo({
+                          y:
+                            layouts.current.usp ||
+                            0,
+                          animated: true,
+                        });
+
+                      }}
+                    >
+
+                      <Text style={styles.nudgePrimary}>
+                        Add USP
+                      </Text>
+
+                    </Pressable>
+
+
+                    <Pressable
+                      onPress={() => {
+
+                        setShowUspNudge(false);
+
+                        setUspNudgeDismissed(true);
+
+                        setTimeout(
+                          () =>
+                            handleCreateAccount(),
+                          50
+                        );
+
+                      }}
+                    >
+
+                      <Text style={styles.nudgeSecondary}>
+                        Skip for now
+                      </Text>
+
+                    </Pressable>
+
+                  </View>
+
+                </View>
+
               </View>
+
             )}
 
-            {/* Create Account button */}
-            <PrimaryButton
-              title="Create Account →"
+
+            {/* ========================================
+                PROGRESS NOTE
+            ======================================== */}
+
+            <View style={styles.finishNote}>
+
+              <View style={styles.finishIcon}>
+
+                <Ionicons
+                  name="checkmark-circle"
+                  size={20}
+                  color={PURPLE}
+                />
+
+              </View>
+
+              <View style={styles.finishTextContainer}>
+
+                <Text style={styles.finishTitle}>
+                  Almost there!
+                </Text>
+
+                <Text style={styles.finishSubtitle}>
+                  Your account will be created after you submit these details.
+                </Text>
+
+              </View>
+
+            </View>
+
+
+            {/* ========================================
+                CREATE ACCOUNT BUTTON
+            ======================================== */}
+
+            <Pressable
               onPress={handleCreateAccount}
-              loading={loading}
               disabled={loading}
-              style={styles.submitBtn}
-            />
+              style={({ pressed }) => [
+                styles.createButton,
+                pressed && !loading && styles.buttonPressed,
+                loading && styles.buttonDisabled,
+              ]}
+            >
+
+              <LinearGradient
+                colors={[
+                  '#7C3AED',
+                  '#6D28D9',
+                ]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.createGradient}
+              >
+
+                {loading ? (
+
+                  <Text style={styles.createText}>
+                    Creating account...
+                  </Text>
+
+                ) : (
+
+                  <>
+                    <Text style={styles.createText}>
+                      Create Account
+                    </Text>
+
+                    <View style={styles.arrowCircle}>
+
+                      <Ionicons
+                        name="arrow-forward"
+                        size={17}
+                        color={PURPLE}
+                      />
+
+                    </View>
+                  </>
+
+                )}
+
+              </LinearGradient>
+
+            </Pressable>
+
+
+            {/* Bottom note */}
+
+            <Text style={styles.bottomNote}>
+              By creating an account, you agree to use REACHLO responsibly.
+            </Text>
+
+
           </View>
+
         </ScrollView>
+
       </KeyboardAvoidingView>
+
     </SafeAreaView>
   );
 }
 
+
+// =====================================================
+// STYLES
+// =====================================================
+
 const styles = StyleSheet.create({
-  container: {
+
+  safeArea: {
     flex: 1,
-    backgroundColor: '#F8FAFF',
+    backgroundColor: PURPLE_DARK,
   },
+
+  keyboardContainer: {
+    flex: 1,
+    backgroundColor: '#F9F8FC',
+  },
+
   scrollContent: {
     paddingBottom: 40,
+    backgroundColor: '#F9F8FC',
   },
+
+
+  // ---------------------------------------------------
+  // HEADER
+  // ---------------------------------------------------
+
   header: {
-    backgroundColor: COLORS.PRIMARY,
-    paddingTop: 40,
-    paddingBottom: 60,
+    minHeight: 345,
+    paddingTop: 27,
     paddingHorizontal: 24,
+    paddingBottom: 72,
     alignItems: 'center',
+    overflow: 'hidden',
   },
-  backBtn: {
+
+  decorCircleOne: {
     position: 'absolute',
-    top: 44,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    top: -105,
+    right: -70,
+  },
+
+  decorCircleTwo: {
+    position: 'absolute',
+    width: 175,
+    height: 175,
+    borderRadius: 88,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    bottom: -90,
+    left: -75,
+  },
+
+  backButton: {
+    position: 'absolute',
+    top: 24,
     left: 20,
-    zIndex: 10,
+
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+
+    backgroundColor: 'rgba(255,255,255,0.14)',
+
+    justifyContent: 'center',
+    alignItems: 'center',
+
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.20)',
   },
-  logoText: {
-    color: COLORS.WHITE,
-    fontSize: FONT_SIZES.SM,
+
+  logo: {
+    color: '#FFFFFF',
+    fontSize: 15,
     fontWeight: FONT_WEIGHTS.BOLD,
-    letterSpacing: 4,
-    opacity: 0.9,
-    marginBottom: 20,
+    letterSpacing: 5,
+    marginBottom: 23,
   },
+
+  headerTitle: {
+    color: '#FFFFFF',
+    fontSize: 29,
+    fontWeight: FONT_WEIGHTS.BOLD,
+    textAlign: 'center',
+    letterSpacing: -0.6,
+    lineHeight: 36,
+  },
+
+  headerSubtitle: {
+    color: 'rgba(255,255,255,0.82)',
+    fontSize: 13.5,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginTop: 9,
+    maxWidth: 310,
+  },
+
+
+  // ---------------------------------------------------
+  // STEPS
+  // ---------------------------------------------------
+
   stepIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    marginTop: 26,
   },
-  stepPillWrapper: {
+
+  stepItem: {
     alignItems: 'center',
-    gap: 6,
+    minWidth: 70,
   },
-  stepPill: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+
+  stepCircleCompleted: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  stepPillActive: {
-    backgroundColor: COLORS.WHITE,
-  },
-  stepPillInactive: {
-    backgroundColor: 'transparent',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.5)',
-  },
-  stepPillText: {
-    fontSize: FONT_SIZES.SM,
-    fontWeight: FONT_WEIGHTS.BOLD,
-  },
-  stepPillTextActive: {
-    color: COLORS.PRIMARY,
-  },
-  stepPillTextInactive: {
-    color: 'rgba(255,255,255,0.7)',
-  },
-  stepLabel: {
-    fontSize: 10,
-    fontWeight: FONT_WEIGHTS.MEDIUM,
-  },
-  stepLabelActive: {
-    color: COLORS.WHITE,
-  },
-  stepLabelInactive: {
-    color: 'rgba(255,255,255,0.5)',
-  },
-  stepConnector: {
-    height: 2,
-    width: 40,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    marginHorizontal: 8,
-    marginBottom: 22,
-  },
-  title: {
-    color: COLORS.WHITE,
-    fontSize: FONT_SIZES.XL,
-    fontWeight: FONT_WEIGHTS.BOLD,
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  subtitle: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: FONT_SIZES.SM,
-  },
-  card: {
+
+  stepCircleActive: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    marginHorizontal: 20,
-    marginTop: -28,
-    paddingHorizontal: 20,
-    paddingVertical: 24,
-    gap: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  fieldLabel: {
-    fontSize: FONT_SIZES.SM,
-    fontWeight: FONT_WEIGHTS.SEMIBOLD,
-    color: COLORS.TEXT_PRIMARY,
-    marginBottom: 6,
-  },
-  required: {
-    color: COLORS.ERROR,
-  },
-  optionalTag: {
-    color: COLORS.TEXT_SECONDARY,
-    fontWeight: FONT_WEIGHTS.REGULAR,
-    fontSize: FONT_SIZES.XS,
-  },
-  textInput: {
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+
+  stepNumberActive: {
+    color: PURPLE,
     fontSize: 14,
-    color: COLORS.TEXT_PRIMARY,
+    fontWeight: '800',
   },
-  textAreaInput: {
-    minHeight: 96,
-    paddingTop: 12,
-  },
-  textAreaInputSmall: {
-    minHeight: 72,
-    paddingTop: 10,
-  },
-  textInputError: {
-    borderColor: COLORS.ERROR,
-  },
-  helperText: {
-    fontSize: FONT_SIZES.XS,
-    color: COLORS.TEXT_SECONDARY,
+
+  stepLabelCompleted: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 11,
+    fontWeight: '600',
     marginTop: 6,
   },
-  errorText: {
-    color: COLORS.ERROR,
-    fontSize: FONT_SIZES.XS,
-    marginTop: 4,
+
+  stepLabelActive: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 6,
   },
-  uspNudge: {
+
+  stepConnectorActive: {
+    width: 55,
+    height: 2,
+    backgroundColor: 'rgba(255,255,255,0.75)',
+    marginHorizontal: 7,
+    marginBottom: 20,
+  },
+
+
+  // ---------------------------------------------------
+  // CARD
+  // ---------------------------------------------------
+
+  formCard: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 18,
+    marginTop: -50,
+
+    borderRadius: 26,
+
+    paddingHorizontal: 22,
+    paddingTop: 24,
+    paddingBottom: 27,
+
+    borderWidth: 1,
+    borderColor: '#EEEAF4',
+
+    shadowColor: '#3B176D',
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    shadowOpacity: 0.10,
+    shadowRadius: 20,
+    elevation: 5,
+  },
+
+
+  // ---------------------------------------------------
+  // CARD HEADER
+  // ---------------------------------------------------
+
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 25,
+  },
+
+  cardIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: PURPLE_LIGHT,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 13,
+  },
+
+  cardHeaderText: {
+    flex: 1,
+  },
+
+  cardTitle: {
+    color: TEXT_PRIMARY,
+    fontSize: 18,
+    fontWeight: FONT_WEIGHTS.BOLD,
+  },
+
+  cardSubtitle: {
+    color: TEXT_SECONDARY,
+    fontSize: 12.5,
+    lineHeight: 18,
+    marginTop: 3,
+  },
+
+
+  // ---------------------------------------------------
+  // INPUT
+  // ---------------------------------------------------
+
+  inputGroup: {
+    marginBottom: 19,
+  },
+
+  inputLabel: {
+    color: TEXT_PRIMARY,
+    fontSize: 13.5,
+    fontWeight: FONT_WEIGHTS.SEMIBOLD,
+    marginBottom: 8,
+  },
+
+  required: {
+    color: ERROR,
+  },
+
+  optionalText: {
+    color: TEXT_MUTED,
+    fontSize: 11,
+    fontWeight: '500',
+  },
+
+  inputContainer: {
+    minHeight: 56,
+    borderRadius: 15,
+
+    borderWidth: 1.3,
+    borderColor: BORDER,
+
+    backgroundColor: INPUT_BG,
+
+    paddingHorizontal: 15,
+
+    justifyContent: 'center',
+  },
+
+  textAreaContainer: {
+    minHeight: 112,
+    paddingVertical: 12,
+  },
+
+  inputContainerFocused: {
+    borderColor: PURPLE,
+    backgroundColor: '#FFFFFF',
+  },
+
+  inputContainerError: {
+    borderColor: ERROR,
+    backgroundColor: '#FFF9F9',
+  },
+
+  textInput: {
+    color: TEXT_PRIMARY,
+    fontSize: 14.5,
+    minHeight: 52,
+    paddingVertical: 0,
+  },
+
+  textAreaInput: {
+    minHeight: 86,
+    lineHeight: 21,
+  },
+
+
+  // ---------------------------------------------------
+  // ERROR
+  // ---------------------------------------------------
+
+  errorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 6,
+  },
+
+  errorText: {
+    color: ERROR,
+    fontSize: 11.5,
+    flex: 1,
+  },
+
+
+  // ---------------------------------------------------
+  // HELPERS
+  // ---------------------------------------------------
+
+  helperRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: '#FFFBEB',
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-    borderRadius: 10,
-    padding: 12,
+    marginTop: -8,
+    marginBottom: 4,
   },
-  uspNudgeText: {
-    fontSize: FONT_SIZES.XS,
-    color: '#92400E',
-    lineHeight: 18,
+
+  helperText: {
+    color: TEXT_SECONDARY,
+    fontSize: 10.5,
+    lineHeight: 16,
+    marginLeft: 5,
+    flex: 1,
   },
-  uspNudgeActions: {
+
+  helperTextPlain: {
+    color: TEXT_MUTED,
+    fontSize: 10.5,
+    lineHeight: 16,
+    marginTop: -8,
+    marginBottom: 4,
+  },
+
+
+  // ---------------------------------------------------
+  // USP NUDGE
+  // ---------------------------------------------------
+
+  uspNudge: {
     flexDirection: 'row',
-    gap: 16,
-    marginTop: 8,
+
+    backgroundColor: '#FFF9EC',
+
+    borderWidth: 1,
+    borderColor: '#F5DFA7',
+
+    borderRadius: 16,
+
+    padding: 13,
+
+    marginBottom: 18,
   },
-  uspNudgeAdd: {
-    color: COLORS.PRIMARY,
-    fontSize: FONT_SIZES.XS,
-    fontWeight: FONT_WEIGHTS.SEMIBOLD,
+
+  nudgeIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#FFF0C7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
   },
-  uspNudgeSkip: {
-    color: COLORS.TEXT_SECONDARY,
-    fontSize: FONT_SIZES.XS,
+
+  nudgeContent: {
+    flex: 1,
   },
-  submitBtn: {
-    marginTop: 8,
+
+  nudgeTitle: {
+    color: '#78350F',
+    fontSize: 12.5,
+    fontWeight: '700',
+    marginBottom: 3,
   },
+
+  nudgeText: {
+    color: '#92400E',
+    fontSize: 10.5,
+    lineHeight: 16,
+  },
+
+  nudgeActions: {
+    flexDirection: 'row',
+    gap: 20,
+    marginTop: 9,
+  },
+
+  nudgePrimary: {
+    color: PURPLE,
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+
+  nudgeSecondary: {
+    color: '#78716C',
+    fontSize: 11.5,
+    fontWeight: '600',
+  },
+
+
+  // ---------------------------------------------------
+  // FINISH NOTE
+  // ---------------------------------------------------
+
+  finishNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+
+    backgroundColor: '#FAF8FF',
+
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#EEE8FA',
+
+    padding: 12,
+
+    marginBottom: 20,
+  },
+
+  finishIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#EEE7FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+
+  finishTextContainer: {
+    flex: 1,
+  },
+
+  finishTitle: {
+    color: TEXT_PRIMARY,
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+
+  finishSubtitle: {
+    color: TEXT_SECONDARY,
+    fontSize: 10.5,
+    lineHeight: 15,
+    marginTop: 2,
+  },
+
+
+  // ---------------------------------------------------
+  // CREATE BUTTON
+  // ---------------------------------------------------
+
+  createButton: {
+    height: 56,
+    borderRadius: 16,
+    overflow: 'hidden',
+
+    shadowColor: PURPLE,
+    shadowOffset: {
+      width: 0,
+      height: 6,
+    },
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+
+  createGradient: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  createText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: FONT_WEIGHTS.BOLD,
+    marginRight: 10,
+  },
+
+  arrowCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  buttonPressed: {
+    transform: [{ scale: 0.985 }],
+    opacity: 0.95,
+  },
+
+  buttonDisabled: {
+    opacity: 0.75,
+  },
+
+
+  // ---------------------------------------------------
+  // BOTTOM
+  // ---------------------------------------------------
+
+  bottomNote: {
+    color: TEXT_MUTED,
+    fontSize: 10,
+    lineHeight: 15,
+    textAlign: 'center',
+    marginTop: 16,
+    paddingHorizontal: 15,
+  },
+
 });

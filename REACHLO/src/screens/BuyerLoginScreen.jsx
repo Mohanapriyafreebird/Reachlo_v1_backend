@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useTheme } from '../context/ThemeContext';
 import {
   View,
   Text,
@@ -21,6 +22,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Toast from '../components/Toast';
 import { useAuth } from '../context/AuthContext';
 import authService from '../services/authService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -60,12 +62,16 @@ const SLIDES = [
 ];
 
 export default function BuyerLoginScreen({ navigation }) {
+  const { theme: originalTheme, isDarkMode: originalIsDarkMode } = useTheme();
+  const theme = require('../constants/theme').BUYER_LIGHT_THEME;
+  const isDarkMode = false;
   const { login, clearAuth } = useAuth();
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [toastVisible, setToastVisible] = useState(false);
@@ -112,6 +118,23 @@ export default function BuyerLoginScreen({ navigation }) {
       keyboardWillHideSub.remove();
     };
   }, [heroScale, heroOpacity, heroHeight]);
+
+  useEffect(() => {
+    const loadCredentials = async () => {
+      try {
+        const savedEmail = await AsyncStorage.getItem('buyerEmail');
+        const savedPassword = await AsyncStorage.getItem('buyerPassword');
+        if (savedEmail && savedPassword) {
+          setEmail(savedEmail);
+          setPassword(savedPassword);
+          setRememberMe(true);
+        }
+      } catch (err) {
+        console.log('Error loading credentials', err);
+      }
+    };
+    loadCredentials();
+  }, []);
 
   useEffect(() => {
     const startAutoScroll = () => {
@@ -180,6 +203,14 @@ export default function BuyerLoginScreen({ navigation }) {
       }
       // ────────────────────────────────────────────────────────────────────
 
+      if (rememberMe) {
+        await AsyncStorage.setItem('buyerEmail', email.trim());
+        await AsyncStorage.setItem('buyerPassword', password);
+      } else {
+        await AsyncStorage.removeItem('buyerEmail');
+        await AsyncStorage.removeItem('buyerPassword');
+      }
+
       navigation.replace('DiscoveryFeed');
     } catch (err) {
       // The backend returns 403 with a descriptive message for wrong-portal attempts
@@ -223,7 +254,7 @@ export default function BuyerLoginScreen({ navigation }) {
   const [passFocused, setPassFocused] = useState(false);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
       <Toast
         visible={toastVisible}
         message={toastMessage}
@@ -342,8 +373,20 @@ export default function BuyerLoginScreen({ navigation }) {
                     </Pressable>
                   </View>
 
-                  {/* Forgot Password */}
-                  <View style={styles.forgotContainer}>
+                  {/* Remember Me and Forgot Password */}
+                  <View style={styles.rememberForgotContainer}>
+                    <Pressable 
+                      style={styles.rememberMeContainer} 
+                      onPress={() => setRememberMe(!rememberMe)}
+                      disabled={loading}
+                    >
+                      <Ionicons 
+                        name={rememberMe ? "checkbox" : "square-outline"} 
+                        size={20} 
+                        color={rememberMe ? '#2563EB' : '#9CA3AF'} 
+                      />
+                      <Text style={styles.rememberMeText}>Remember me</Text>
+                    </Pressable>
                     <Pressable onPress={() => navigation.navigate('ForgotPassword')} disabled={loading}>
                       <Text style={styles.forgotText}>Forgot Password?</Text>
                     </Pressable>
@@ -592,10 +635,22 @@ const styles = StyleSheet.create({
   eyeIcon: {
     padding: 4,
   },
-  forgotContainer: {
-    alignItems: 'flex-end',
+  rememberForgotContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginTop: 12,
     marginBottom: 24,
+  },
+  rememberMeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  rememberMeText: {
+    color: '#6B7280',
+    fontSize: 14,
+    fontWeight: '500',
   },
   forgotText: {
     color: '#2563EB',

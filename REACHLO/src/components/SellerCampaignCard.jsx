@@ -17,6 +17,7 @@ import ImageCarousel from './ImageCarousel';
 import BusinessVerifiedBadge from './BusinessVerifiedBadge';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTheme } from '../context/ThemeContext';
 
 export default function SellerCampaignCard({
   campaign,
@@ -26,6 +27,7 @@ export default function SellerCampaignCard({
   showActionsMenu = true,
   dimmed = false,
 }) {
+  const { theme, isDarkMode } = useTheme();
   const [menuVisible, setMenuVisible] = useState(false);
   const images = getCampaignImages(campaign);
   const leadCount = campaign.leads?.length ?? campaign.leadsCount ?? 0;
@@ -77,12 +79,15 @@ export default function SellerCampaignCard({
             styles.card,
             dimmed && styles.cardDimmed,
             {
+              backgroundColor: theme.cardBackground,
+              borderColor: theme.border,
+              shadowColor: isDarkMode ? '#000' : '#1E40AF',
               opacity: entryAnim,
               transform: [{ scale: scaleAnim }, { translateY: entryTranslate }],
             },
           ]}
         >
-          {/* ── IMAGE SECTION ── */}
+          {/* â”€â”€ IMAGE SECTION â”€â”€ */}
           <View style={styles.posterWrap}>
             {images.length > 0 ? (
               <ImageCarousel
@@ -93,9 +98,9 @@ export default function SellerCampaignCard({
                 rounded={false}
               />
             ) : (
-              <LinearGradient colors={['#DBEAFE', '#EFF6FF']} style={styles.posterPlaceholder}>
-                <Ionicons name="image-outline" size={36} color="#93C5FD" />
-                <Text style={styles.posterPlaceholderText}>No Thumbnail</Text>
+              <LinearGradient colors={isDarkMode ? ['#4C1D95', '#5B21B6'] : ['#DDD6FE', '#EDE9FE']} style={styles.posterPlaceholder}>
+                <Ionicons name="image-outline" size={36} color={isDarkMode ? '#A78BFA' : '#93C5FD'} />
+                <Text style={[styles.posterPlaceholderText, { color: isDarkMode ? '#A78BFA' : '#93C5FD' }]}>No Thumbnail</Text>
               </LinearGradient>
             )}
 
@@ -127,27 +132,28 @@ export default function SellerCampaignCard({
                   style={styles.menuDotBtn}
                   onPress={() => setMenuVisible(true)}
                 >
-                  <Text style={styles.menuDotBtnText}>⋮</Text>
+                  <Ionicons name="ellipsis-vertical" size={18} color="#0C1445" />
                 </Pressable>
               )}
             </View>
           </View>
 
-          {/* ── BODY SECTION ── */}
-          <View style={styles.bodySection}>
+          {/*  BODY SECTION */}
+          <View style={[styles.bodySection, { backgroundColor: theme.cardBackground }]}>
             {/* Offer Badge */}
             {offerText ? (
-              <View style={styles.offerBadge}>
-                <Text style={styles.offerBadgeText} numberOfLines={2}>🔥 {offerText}</Text>
+              <View style={[styles.offerBadge, { flexDirection: 'row', alignItems: 'center', backgroundColor: isDarkMode ? '#422006' : '#FEF9C3', borderColor: isDarkMode ? '#713F12' : 'rgba(251,191,36,0.35)' }]}>
+                <Ionicons name="flame" size={12} color="#D97706" />
+                <Text style={[styles.offerBadgeText, { marginLeft: 4 }]} numberOfLines={2}>{offerText}</Text>
               </View>
             ) : null}
 
             {/* Title */}
-            <Text style={styles.title} numberOfLines={2}>{campaign.title}</Text>
+            <Text style={[styles.title, { color: theme.text }]} numberOfLines={2}>{campaign.title}</Text>
 
             {/* Business Name */}
             <View style={styles.businessRow}>
-              <Text style={styles.businessName} numberOfLines={1}>{businessName}</Text>
+              <Text style={[styles.businessName, { color: theme.sellerPrimary }]} numberOfLines={1}>{businessName}</Text>
               {isVerified && <BusinessVerifiedBadge compact />}
             </View>
 
@@ -157,24 +163,27 @@ export default function SellerCampaignCard({
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.chipsRow}
             >
-              <View style={styles.chip}>
-                <Text style={styles.chipText}>📅 {endLabel}</Text>
+              <View style={[styles.chip, { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surfaceSecondary, borderColor: theme.border }]}>
+                <Ionicons name="calendar-outline" size={12} color={theme.textSecondary} />
+                <Text style={[styles.chipText, { color: theme.textSecondary, marginLeft: 4 }]}>{endLabel}</Text>
               </View>
-              <View style={styles.chip}>
-                <Text style={styles.chipText}>👁 {campaign.views ?? 0} views</Text>
+              <View style={[styles.chip, { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surfaceSecondary, borderColor: theme.border }]}>
+                <Ionicons name="eye-outline" size={12} color={theme.textSecondary} />
+                <Text style={[styles.chipText, { color: theme.textSecondary, marginLeft: 4 }]}>{campaign.views ?? 0} views</Text>
               </View>
-              <View style={styles.chip}>
-                <Text style={styles.chipText}>🎯 {campaign.leadsCount ?? leadCount} leads</Text>
+              <View style={[styles.chip, { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surfaceSecondary, borderColor: theme.border }]}>
+                <Ionicons name="people-outline" size={12} color={theme.textSecondary} />
+                <Text style={[styles.chipText, { color: theme.textSecondary, marginLeft: 4 }]}>{campaign.leadsCount ?? leadCount} leads</Text>
               </View>
             </ScrollView>
 
             {/* CTA + Price Row */}
             <View style={styles.footerRow}>
-              <Pressable style={styles.viewLeadsBtn} onPress={onViewLeads}>
-                <Text style={styles.viewLeadsBtnText}>View Leads</Text>
+              <Pressable style={[styles.viewLeadsBtn, { borderColor: theme.sellerPrimary, backgroundColor: theme.surfaceSecondary }]} onPress={onViewLeads}>
+                <Text style={[styles.viewLeadsBtnText, { color: theme.sellerPrimary }]}>View Leads</Text>
               </Pressable>
               <LinearGradient
-                colors={['#38BDF8', '#2563EB']}
+                colors={['#9333EA', '#7C3AED']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.priceGradient}
@@ -187,7 +196,7 @@ export default function SellerCampaignCard({
       </Pressable>
 
       {/* Actions Bottom Sheet */}
-      {/* Actions Menu — inline overlay (no Modal to avoid nested-Modal crash on Android APK) */}
+      {/* Actions Menu â€” inline overlay (no Modal to avoid nested-Modal crash on Android APK) */}
       {menuVisible && (
         <>
           {/* Tap-outside-to-close backdrop */}
@@ -195,17 +204,17 @@ export default function SellerCampaignCard({
             style={styles.menuBackdrop}
             onPress={closeMenu}
           />
-          {/* Menu panel anchored below the ⋮ button */}
-          <View style={styles.menuPanel}>
-            <View style={styles.menuHandle} />
+          {/* Menu panel anchored below the â‹® button */}
+          <View style={[styles.menuPanel, { backgroundColor: theme.surface }]}>
+            <View style={[styles.menuHandle, { backgroundColor: theme.border }]} />
             <Pressable
               style={styles.menuItem}
               onPress={() => { closeMenu(); onEdit?.(); }}
             >
-              <Ionicons name="create-outline" size={20} color="#0C1445" style={{ marginRight: 10 }} />
-              <Text style={styles.menuItemText}>Edit Campaign</Text>
+              <Ionicons name="create-outline" size={20} color={theme.text} style={{ marginRight: 10 }} />
+              <Text style={[styles.menuItemText, { color: theme.text }]}>Edit Campaign</Text>
             </Pressable>
-            <View style={styles.menuDivider} />
+            <View style={[styles.menuDivider, { backgroundColor: theme.divider }]} />
             <Pressable
               style={styles.menuItem}
               onPress={() => { closeMenu(); onDelete?.(); }}
@@ -213,8 +222,8 @@ export default function SellerCampaignCard({
               <Ionicons name="trash-outline" size={20} color="#DC2626" style={{ marginRight: 10 }} />
               <Text style={styles.menuItemTextDanger}>Delete Campaign</Text>
             </Pressable>
-            <Pressable style={styles.menuCancelBtn} onPress={closeMenu}>
-              <Text style={styles.menuCancelText}>Cancel</Text>
+            <Pressable style={[styles.menuCancelBtn, { backgroundColor: theme.surfaceSecondary }]} onPress={closeMenu}>
+              <Text style={[styles.menuCancelText, { color: theme.textSecondary }]}>Cancel</Text>
             </Pressable>
           </View>
         </>
@@ -315,11 +324,14 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.75)',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.5)',
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 3,
   },
   menuDotBtnText: {
     fontSize: 20,
@@ -368,7 +380,7 @@ const styles = StyleSheet.create({
   },
   businessName: {
     fontSize: 13,
-    color: '#2563EB',
+    color: '#7C3AED',
     fontWeight: '700',
   },
   chipsRow: {
@@ -406,13 +418,13 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#2563EB',
+    borderColor: '#7C3AED',
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
   viewLeadsBtnText: {
-    color: '#2563EB',
+    color: '#7C3AED',
     fontWeight: '700',
     fontSize: 14,
   },
@@ -440,7 +452,7 @@ const styles = StyleSheet.create({
   },
   menuPanel: {
     position: 'absolute',
-    top: 48,   // just below the ⋮ button
+    top: 48,   // just below the â‹® button
     right: 10,
     width: 220,
     backgroundColor: '#FFFFFF',
@@ -497,3 +509,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 });
+
+

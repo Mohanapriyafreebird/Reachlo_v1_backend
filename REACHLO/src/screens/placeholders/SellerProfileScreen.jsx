@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
+  Switch,
   View,
   Text,
   StyleSheet,
@@ -14,8 +15,9 @@ import {
   UIManager,
   Modal,
   Image,
-  Alert
+  Alert,
 } from 'react-native';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -24,6 +26,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import COLORS from '../../constants/colors';
+import { useTheme } from '../../context/ThemeContext';
 import { FONT_SIZES, FONT_WEIGHTS } from '../../constants/typography';
 import Toast from '../../components/Toast';
 import BusinessLocationPicker from '../../components/BusinessLocationPicker';
@@ -31,986 +34,4776 @@ import RatingModal from '../../components/RatingModal';
 import { useAuth } from '../../context/AuthContext';
 import apiService from '../../services/apiService';
 
-// Enable LayoutAnimation on Android
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+
+// ============================================================
+// ANDROID LAYOUT ANIMATION
+// ============================================================
+
+if (
+  Platform.OS === 'android' &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
+
+// ============================================================
+// MAIN SCREEN
+// ============================================================
+
 export default function SellerProfileScreen({ navigation }) {
-  const { user, updateUserProfile, logout } = useAuth();
+
+  const { theme, isDarkMode, toggleDarkMode } = useTheme();
+  const { updateUserProfile, logout } = useAuth();
+
+  // ==========================================================
+  // THEME COLORS
+  // ==========================================================
+
+  const colors = isDarkMode
+    ? {
+        background: '#070B16',
+        header: '#111A2D',
+        surface: '#182542',
+        surfaceElevated: '#111A2D',
+        surfaceSoft: '#182542',
+        input: '#182542',
+        inputPressed: '#223254',
+        border: 'rgba(255,255,255,0.12)',
+        borderStrong: 'rgba(255,255,255,0.16)',
+        divider: 'rgba(255,255,255,0.08)',
+        text: '#F8FAFF',
+        textSecondary: '#AAB6CC',
+        textMuted: '#8491A6',
+        placeholder: '#6F7D92',
+        primary: '#5B8CFF',
+        primaryBlue: '#5B8CFF',
+        primarySoft: 'rgba(91,140,255,0.16)',
+        primarySofter: 'rgba(91,140,255,0.09)',
+        blueSoft: 'rgba(91,140,255,0.15)',
+        success: '#4ADE80',
+        successBg: 'rgba(34,197,94,0.12)',
+        successBorder: 'rgba(74,222,128,0.25)',
+        danger: '#EF4444',
+        dangerBg: '#301719',
+        dangerBorder: '#65262A',
+      }
+    : {
+        background: '#F7F9FC',
+        header: '#FFFFFF',
+        surface: '#F3F7FF',
+        surfaceElevated: '#FFFFFF',
+        surfaceSoft: '#F8FAFF',
+        input: '#F8FAFC',
+        inputPressed: '#F5F7FF',
+        border: '#E4EAF2',
+        borderStrong: '#CBD5E1',
+        divider: '#E7EBF0',
+        text: '#111827',
+        textSecondary: '#667085',
+        textMuted: '#8A94A6',
+        placeholder: '#98A2B3',
+        primary: '#3478F6',
+        primaryBlue: '#3478F6',
+        primarySoft: '#EAF0FF',
+        primarySofter: '#F2F6FF',
+        blueSoft: '#EAF0FF',
+        success: '#16A34A',
+        successBg: '#F0FDF4',
+        successBorder: '#BBF7D0',
+        danger: '#EF4444',
+        dangerBg: '#FEF2F2',
+        dangerBorder: '#FECACA',
+      };
+
+
+  // ==========================================================
+  // STATE
+  // ==========================================================
 
   const [profile, setProfile] = useState(null);
   const [analytics, setAnalytics] = useState(null);
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // Edit states
   const [isEditingPersonal, setIsEditingPersonal] = useState(false);
   const [isEditingBusiness, setIsEditingBusiness] = useState(false);
 
-  // Password change modal
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [savingPassword, setSavingPassword] = useState(false);
-
-  // Editable field state
+  // Personal
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [city, setCity] = useState('');
+
+  // Business
   const [businessName, setBusinessName] = useState('');
   const [businessDescription, setBusinessDescription] = useState('');
   const [usp, setUsp] = useState('');
   const [category, setCategory] = useState('');
   const [website, setWebsite] = useState('');
   const [gstNumber, setGstNumber] = useState('');
+
+  // Location
   const [locationAddress, setLocationAddress] = useState('');
-  const [profileImage, setProfileImage] = useState(null);
-
-  // Chat settings modal
-  const [showChatSettingsModal, setShowChatSettingsModal] = useState(false);
-  const [chatRetention, setChatRetention] = useState('forever');
-  const [savingChatSettings, setSavingChatSettings] = useState(false);
-
-  // FAQ Modal
-  const [showFaqModal, setShowFaqModal] = useState(false);
-
-  // Rating Modal
-  const [showRatingModal, setShowRatingModal] = useState(false);
-
-  
-  useEffect(() => {
-    const loadChatSettings = async () => {
-      try {
-        const val = await AsyncStorage.getItem('chat_retention_policy');
-        if (val) setChatRetention(val);
-      } catch (e) {}
-    };
-    loadChatSettings();
-  }, []);
-  
-  const saveChatSettings = async (policy) => {
-    setSavingChatSettings(true);
-    try {
-      await AsyncStorage.setItem('chat_retention_policy', policy);
-      setChatRetention(policy);
-      showToast('Chat settings updated successfully', 'success');
-      setTimeout(() => setShowChatSettingsModal(false), 500);
-    } catch (e) {
-      showToast('Failed to update chat settings', 'error');
-    } finally {
-      setSavingChatSettings(false);
-    }
-  };
-
   const [locationData, setLocationData] = useState(null);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
 
-  // Track original values to detect changes
+  // Profile image
+  const [profileImage, setProfileImage] = useState(null);
+
+  // Chat settings
+  const [showChatSettingsModal, setShowChatSettingsModal] =
+    useState(false);
+
+  const [chatRetention, setChatRetention] =
+    useState('forever');
+
+  const [savingChatSettings, setSavingChatSettings] =
+    useState(false);
+
+  // FAQ
+  const [showFaqModal, setShowFaqModal] =
+    useState(false);
+
+  // Rating
+  const [showRatingModal, setShowRatingModal] =
+    useState(false);
+
+  // Original values
   const original = useRef({});
 
+  // Save animation
+  const saveAnim = useRef(
+    new Animated.Value(0)
+  ).current;
+
   // Toast
-  const [toastVisible, setToastVisible] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
-  const [toastType, setToastType] = useState('success');
+  const [toastVisible, setToastVisible] =
+    useState(false);
 
-  // Animated Save button
-  const saveAnim = useRef(new Animated.Value(0)).current;
+  const [toastMessage, setToastMessage] =
+    useState('');
 
-  const showToast = (msg, type = 'success') => {
-    setToastMessage(msg);
+  const [toastType, setToastType] =
+    useState('success');
+
+
+  // ==========================================================
+  // TOAST
+  // ==========================================================
+
+  const showToast = (
+    message,
+    type = 'success'
+  ) => {
+    setToastMessage(message);
     setToastType(type);
     setToastVisible(true);
   };
 
-  const hasChanges = () =>
-    name !== original.current.name ||
-    phone !== original.current.phone ||
-    businessName !== original.current.businessName ||
-    businessDescription !== original.current.businessDescription ||
-    usp !== original.current.usp ||
-    website !== original.current.website ||
-    gstNumber !== original.current.gstNumber ||
-    profileImage !== original.current.profileImage ||
-    locationData !== null;
+
+  // ==========================================================
+  // LOAD CHAT SETTINGS
+  // ==========================================================
 
   useEffect(() => {
-    Animated.spring(saveAnim, {
-      toValue: (isEditingPersonal || isEditingBusiness) && hasChanges() ? 1 : 0,
-      useNativeDriver: true,
-    }).start();
-  }, [isEditingPersonal, isEditingBusiness, name, phone, businessName, businessDescription, usp, website, gstNumber, locationData, profileImage]);
 
-  useEffect(() => { loadProfile(); }, []);
+    const loadChatSettings = async () => {
+
+      try {
+
+        const value =
+          await AsyncStorage.getItem(
+            'chat_retention_policy'
+          );
+
+        if (value) {
+          setChatRetention(value);
+        }
+
+      } catch (error) {
+        // Ignore local storage errors
+      }
+
+    };
+
+    loadChatSettings();
+
+  }, []);
+
+
+  // ==========================================================
+  // SAVE CHAT SETTINGS
+  // ==========================================================
+
+  const saveChatSettings = async (policy) => {
+
+    setSavingChatSettings(true);
+
+    try {
+
+      await AsyncStorage.setItem(
+        'chat_retention_policy',
+        policy
+      );
+
+      setChatRetention(policy);
+
+      showToast(
+        'Chat settings updated successfully',
+        'success'
+      );
+
+      setTimeout(() => {
+        setShowChatSettingsModal(false);
+      }, 500);
+
+    } catch (error) {
+
+      showToast(
+        'Failed to update chat settings',
+        'error'
+      );
+
+    } finally {
+
+      setSavingChatSettings(false);
+
+    }
+  };
+
+
+  // ==========================================================
+  // CHECK CHANGES
+  // ==========================================================
+
+  const hasChanges = () => {
+
+    return (
+      name !== original.current.name ||
+      phone !== original.current.phone ||
+      businessName !== original.current.businessName ||
+      businessDescription !==
+        original.current.businessDescription ||
+      usp !== original.current.usp ||
+      website !== original.current.website ||
+      gstNumber !== original.current.gstNumber ||
+      profileImage !==
+        original.current.profileImage ||
+      locationData !== null
+    );
+
+  };
+
+
+  // ==========================================================
+  // SAVE BUTTON ANIMATION
+  // ==========================================================
+
+  useEffect(() => {
+
+    Animated.spring(saveAnim, {
+      toValue:
+        (isEditingPersonal ||
+          isEditingBusiness) &&
+        hasChanges()
+          ? 1
+          : 0,
+
+      useNativeDriver: true,
+
+      tension: 80,
+
+      friction: 12,
+    }).start();
+
+  }, [
+    isEditingPersonal,
+    isEditingBusiness,
+    name,
+    phone,
+    businessName,
+    businessDescription,
+    usp,
+    website,
+    gstNumber,
+    profileImage,
+    locationData,
+  ]);
+
+
+  // ==========================================================
+  // LOAD PROFILE
+  // ==========================================================
+
+  useEffect(() => {
+
+    loadProfile();
+
+  }, []);
+
 
   const loadProfile = async () => {
+
     setLoading(true);
+
     try {
-      const data = await apiService.get('/businesses/me/full');
+
+      const data =
+        await apiService.get(
+          '/businesses/me/full'
+        );
+
       setProfile(data);
+
       setName(data.name || '');
       setPhone(data.phone || '');
       setEmail(data.email || '');
       setCity(data.city || '');
-      setBusinessName(data.business_name || '');
-      setBusinessDescription(data.business_description || '');
+
+      setBusinessName(
+        data.business_name || ''
+      );
+
+      setBusinessDescription(
+        data.business_description || ''
+      );
+
       setUsp(data.usp || '');
-      setCategory(data.category || '');
-      setWebsite(data.website_url || '');
-      setGstNumber(data.gst_number || '');
-      setLocationAddress(data.location_address || '');
-      setProfileImage(data.profile_image_url || null);
-      
+
+      setCategory(
+        data.category || ''
+      );
+
+      setWebsite(
+        data.website_url || ''
+      );
+
+      setGstNumber(
+        data.gst_number || ''
+      );
+
+      setLocationAddress(
+        data.location_address || ''
+      );
+
+      setProfileImage(
+        data.profile_image_url || null
+      );
+
+
       original.current = {
+
         name: data.name || '',
+
         phone: data.phone || '',
-        businessName: data.business_name || '',
-        businessDescription: data.business_description || '',
+
+        businessName:
+          data.business_name || '',
+
+        businessDescription:
+          data.business_description || '',
+
         usp: data.usp || '',
-        website: data.website_url || '',
-        gstNumber: data.gst_number || '',
-        profileImage: data.profile_image_url || null,
+
+        website:
+          data.website_url || '',
+
+        gstNumber:
+          data.gst_number || '',
+
+        profileImage:
+          data.profile_image_url || null,
+
       };
-      
-      const stats = await apiService.get('/businesses/me/analytics');
-      setAnalytics(stats);
-    } catch (e) {
-      showToast('Failed to load profile. Please try again.', 'error');
+
+
+      try {
+
+        const stats =
+          await apiService.get(
+            '/businesses/me/analytics'
+          );
+
+        setAnalytics(stats);
+
+      } catch (analyticsError) {
+
+        setAnalytics(null);
+
+      }
+
+    } catch (error) {
+
+      showToast(
+        'Failed to load profile. Please try again.',
+        'error'
+      );
+
     } finally {
+
       setLoading(false);
+
     }
   };
 
+
+  // ==========================================================
+  // IMAGE PICKER
+  // ==========================================================
+
   const handlePickImage = async () => {
-    if (!isEditingPersonal && !isEditingBusiness) return;
-    
+
+    if (
+      !isEditingPersonal &&
+      !isEditingBusiness
+    ) {
+      return;
+    }
+
+
     Alert.alert(
-      "Upload Profile Picture",
-      "Choose an option",
+      'Upload Profile Picture',
+      'Choose an option',
       [
+
         {
-          text: "Camera",
+          text: 'Camera',
+
           onPress: async () => {
-            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+
+            const { status } =
+              await ImagePicker
+                .requestCameraPermissionsAsync();
+
             if (status !== 'granted') {
-              showToast('Sorry, we need camera permissions to make this work!', 'error');
+
+              showToast(
+                'Camera permission is required.',
+                'error'
+              );
+
               return;
             }
-            let result = await ImagePicker.launchCameraAsync({
-              mediaTypes: ImagePicker.MediaTypeOptions.Images,
-              allowsEditing: true,
-              aspect: [1, 1],
-              quality: 0.8,
-            });
+
+
+            const result =
+              await ImagePicker
+                .launchCameraAsync({
+
+                  mediaTypes:
+                    ImagePicker.MediaTypeOptions.Images,
+
+                  allowsEditing: true,
+
+                  aspect: [1, 1],
+
+                  quality: 0.8,
+
+                });
+
+
             if (!result.canceled) {
-              setProfileImage(result.assets[0].uri);
+
+              setProfileImage(
+                result.assets[0].uri
+              );
+
             }
-          }
+          },
         },
+
+
         {
-          text: "Gallery",
+          text: 'Gallery',
+
           onPress: async () => {
-            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+            const { status } =
+              await ImagePicker
+                .requestMediaLibraryPermissionsAsync();
+
             if (status !== 'granted') {
-              showToast('Sorry, we need gallery permissions to make this work!', 'error');
+
+              showToast(
+                'Gallery permission is required.',
+                'error'
+              );
+
               return;
             }
-            let result = await ImagePicker.launchImageLibraryAsync({
-              mediaTypes: ImagePicker.MediaTypeOptions.Images,
-              allowsEditing: true,
-              aspect: [1, 1],
-              quality: 0.8,
-            });
+
+
+            const result =
+              await ImagePicker
+                .launchImageLibraryAsync({
+
+                  mediaTypes:
+                    ImagePicker.MediaTypeOptions.Images,
+
+                  allowsEditing: true,
+
+                  aspect: [1, 1],
+
+                  quality: 0.8,
+
+                });
+
+
             if (!result.canceled) {
-              setProfileImage(result.assets[0].uri);
+
+              setProfileImage(
+                result.assets[0].uri
+              );
+
             }
-          }
+          },
         },
-        { text: "Cancel", style: "cancel" }
+
+
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+
       ]
     );
   };
 
+
+  // ==========================================================
+  // CURRENT LOCATION
+  // ==========================================================
+
   const handleUseCurrentLocation = async () => {
+
     try {
-      let { status } = await Location.requestForegroundPermissionsAsync();
+
+      const { status } =
+        await Location
+          .requestForegroundPermissionsAsync();
+
+
       if (status !== 'granted') {
-        showToast('Permission to access location was denied', 'error');
+
+        showToast(
+          'Permission to access location was denied.',
+          'error'
+        );
+
         return;
       }
 
+
       setLoading(true);
-      let location = await Location.getCurrentPositionAsync({});
-      
-      const geocode = await Location.reverseGeocodeAsync({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude
-      });
-      
-      if (geocode && geocode.length > 0) {
-        const place = geocode[0];
-        const formattedAddress = `${place.name ? place.name + ', ' : ''}${place.street || ''}, ${place.city || place.subregion || ''}, ${place.region || ''} ${place.postalCode || ''}`.replace(/^[,\s]+|[,\s]+$/g, '').replace(/,\s*,/g, ',');
-        
-        setLocationData({
-          address: formattedAddress,
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-          city: place.city || place.subregion || city
+
+
+      const location =
+        await Location.getCurrentPositionAsync({});
+
+
+      const geocode =
+        await Location.reverseGeocodeAsync({
+
+          latitude:
+            location.coords.latitude,
+
+          longitude:
+            location.coords.longitude,
+
         });
-        showToast('Location updated', 'success');
+
+
+      if (
+        geocode &&
+        geocode.length > 0
+      ) {
+
+        const place = geocode[0];
+
+
+        const formattedAddress =
+          `${place.name ? place.name + ', ' : ''}` +
+          `${place.street || ''}, ` +
+          `${place.city || place.subregion || ''}, ` +
+          `${place.region || ''} ` +
+          `${place.postalCode || ''}`
+            .replace(
+              /^[,\s]+|[,\s]+$/g,
+              ''
+            )
+            .replace(
+              /,\s*,/g,
+              ','
+            );
+
+
+        setLocationData({
+
+          address:
+            formattedAddress,
+
+          latitude:
+            location.coords.latitude,
+
+          longitude:
+            location.coords.longitude,
+
+          city:
+            place.city ||
+            place.subregion ||
+            city,
+
+        });
+
+
+        showToast(
+          'Location updated',
+          'success'
+        );
+
       }
+
     } catch (error) {
-      showToast('Could not fetch current location', 'error');
+
+      showToast(
+        'Could not fetch current location.',
+        'error'
+      );
+
     } finally {
+
       setLoading(false);
+
     }
   };
 
+
+  // ==========================================================
+  // SAVE PROFILE
+  // ==========================================================
+
   const handleSave = async () => {
+
     setSaving(true);
+
     try {
+
       const promises = [];
 
+
+      // ------------------------------------------------------
+      // Personal changes
+      // ------------------------------------------------------
+
       const personalChanges = {};
-      if (name !== original.current.name) personalChanges.name = name.trim();
-      if (phone !== original.current.phone) personalChanges.phone = phone.replace(/[^0-9]/g, '');
-      // Note: we are not uploading the image to the server in this placeholder, but we would add it here usually.
-      
-      if (Object.keys(personalChanges).length > 0) {
-        promises.push(apiService.request('/auth/me', { method: 'PATCH', body: personalChanges }));
+
+
+      if (
+        name !== original.current.name
+      ) {
+
+        personalChanges.name =
+          name.trim();
+
       }
 
+
+      if (
+        phone !== original.current.phone
+      ) {
+
+        personalChanges.phone =
+          phone.replace(
+            /[^0-9]/g,
+            ''
+          );
+
+      }
+
+
+      if (
+        Object.keys(personalChanges)
+          .length > 0
+      ) {
+
+        promises.push(
+
+          apiService.request(
+            '/auth/me',
+            {
+              method: 'PATCH',
+              body: personalChanges,
+            }
+          )
+
+        );
+
+      }
+
+
+      // ------------------------------------------------------
+      // Business changes
+      // ------------------------------------------------------
+
       const businessChanges = {};
-      if (businessName !== original.current.businessName) businessChanges.name = businessName.trim();
-      if (businessDescription !== original.current.businessDescription) {
-        businessChanges.business_description = businessDescription.trim();
+
+
+      if (
+        businessName !==
+        original.current.businessName
+      ) {
+
+        businessChanges.name =
+          businessName.trim();
+
       }
-      if (usp !== original.current.usp) businessChanges.usp = usp.trim();
-      if (website !== original.current.website) businessChanges.website_url = website.trim();
-      if (gstNumber !== original.current.gstNumber) businessChanges.gst_number = gstNumber.trim();
-      
+
+
+      if (
+        businessDescription !==
+        original.current.businessDescription
+      ) {
+
+        businessChanges.business_description =
+          businessDescription.trim();
+
+      }
+
+
+      if (
+        usp !== original.current.usp
+      ) {
+
+        businessChanges.usp =
+          usp.trim();
+
+      }
+
+
+      if (
+        website !== original.current.website
+      ) {
+
+        businessChanges.website_url =
+          website.trim();
+
+      }
+
+
+      if (
+        gstNumber !==
+        original.current.gstNumber
+      ) {
+
+        businessChanges.gst_number =
+          gstNumber.trim();
+
+      }
+
+
       if (locationData) {
-        businessChanges.location_address = locationData.address;
-        businessChanges.latitude = locationData.latitude;
-        businessChanges.longitude = locationData.longitude;
-        businessChanges.city = locationData.city || locationData.address.split(',')[0]?.trim() || city;
+
+        businessChanges.location_address =
+          locationData.address;
+
+        businessChanges.latitude =
+          locationData.latitude;
+
+        businessChanges.longitude =
+          locationData.longitude;
+
+        businessChanges.city =
+          locationData.city ||
+          locationData.address
+            .split(',')[0]
+            ?.trim() ||
+          city;
+
       }
-      
-      if (Object.keys(businessChanges).length > 0) {
-        promises.push(apiService.request('/businesses/me', { method: 'PATCH', body: businessChanges }));
+
+
+      if (
+        Object.keys(businessChanges)
+          .length > 0
+      ) {
+
+        promises.push(
+
+          apiService.request(
+            '/businesses/me',
+            {
+              method: 'PATCH',
+              body: businessChanges,
+            }
+          )
+
+        );
+
       }
+
 
       await Promise.all(promises);
 
-      if (Object.keys(personalChanges).length > 0) updateUserProfile(personalChanges);
+
+      if (
+        Object.keys(personalChanges)
+          .length > 0
+      ) {
+
+        updateUserProfile(
+          personalChanges
+        );
+
+      }
+
 
       original.current = {
-        name: name.trim(),
-        phone: phone.replace(/[^0-9]/g, ''),
-        businessName: businessName.trim(),
-        businessDescription: businessDescription.trim(),
-        usp: usp.trim(),
-        website: website.trim(),
-        gstNumber: gstNumber.trim(),
-        profileImage: profileImage,
+
+        name:
+          name.trim(),
+
+        phone:
+          phone.replace(
+            /[^0-9]/g,
+            ''
+          ),
+
+        businessName:
+          businessName.trim(),
+
+        businessDescription:
+          businessDescription.trim(),
+
+        usp:
+          usp.trim(),
+
+        website:
+          website.trim(),
+
+        gstNumber:
+          gstNumber.trim(),
+
+        profileImage:
+          profileImage,
+
       };
-      
+
+
       if (locationData) {
-        setProfile(prev => ({...prev, location_address: locationData.address}));
-        setLocationAddress(locationData.address);
-        setCity(locationData.city || city);
+
+        setProfile(prev => ({
+          ...prev,
+          location_address:
+            locationData.address,
+        }));
+
+        setLocationAddress(
+          locationData.address
+        );
+
+        setCity(
+          locationData.city || city
+        );
+
       }
-      
+
+
       setLocationData(null);
+
       setIsEditingPersonal(false);
+
       setIsEditingBusiness(false);
-      showToast('Profile updated successfully', 'success');
-    } catch (e) {
-      showToast(e.message || 'Failed to save. Please try again.', 'error');
+
+
+      showToast(
+        'Profile updated successfully',
+        'success'
+      );
+
+    } catch (error) {
+
+      showToast(
+        error?.message ||
+          'Failed to save. Please try again.',
+        'error'
+      );
+
     } finally {
+
       setSaving(false);
+
     }
   };
+
+
+  // ==========================================================
+  // CANCEL
+  // ==========================================================
 
   const handleCancel = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setName(original.current.name);
-    setPhone(original.current.phone);
-    setBusinessName(original.current.businessName);
-    setBusinessDescription(original.current.businessDescription);
-    setUsp(original.current.usp);
-    setWebsite(original.current.website);
-    setGstNumber(original.current.gstNumber || '');
-    setProfileImage(original.current.profileImage);
+
+    LayoutAnimation.configureNext(
+      LayoutAnimation.Presets.easeInEaseOut
+    );
+
+
+    setName(
+      original.current.name
+    );
+
+    setPhone(
+      original.current.phone
+    );
+
+    setBusinessName(
+      original.current.businessName
+    );
+
+    setBusinessDescription(
+      original.current.businessDescription
+    );
+
+    setUsp(
+      original.current.usp
+    );
+
+    setWebsite(
+      original.current.website
+    );
+
+    setGstNumber(
+      original.current.gstNumber || ''
+    );
+
+    setProfileImage(
+      original.current.profileImage
+    );
+
     setLocationData(null);
+
     setIsEditingPersonal(false);
+
     setIsEditingBusiness(false);
+
   };
 
-  const handleChangePassword = async () => {
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      showToast('Please fill all password fields', 'error');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      showToast('New passwords do not match', 'error');
-      return;
-    }
-    setSavingPassword(true);
-    try {
-      await apiService.request('/auth/change-password', {
-        method: 'POST',
-        body: { current_password: currentPassword, new_password: newPassword }
-      });
-      showToast('Password updated successfully', 'success');
-      setShowPasswordModal(false);
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-    } catch (e) {
-      showToast(e.message || 'Failed to update password', 'error');
-    } finally {
-      setSavingPassword(false);
-    }
-  };
-  
+
+  // ==========================================================
+  // DELETE ACCOUNT
+  // ==========================================================
+
   const confirmDeleteAccount = () => {
+
     Alert.alert(
-      "Delete Account",
-      "Are you sure you want to delete your account? This action cannot be undone.",
+      'Delete Account',
+      'Are you sure you want to delete your account? This action cannot be undone.',
       [
-        { text: "Cancel", style: "cancel" },
-        { text: "Delete", style: "destructive", onPress: () => showToast("Account deletion requested", "success") }
+
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+
+        {
+          text: 'Delete',
+          style: 'destructive',
+
+          onPress: () => {
+
+            showToast(
+              'Account deletion requested',
+              'success'
+            );
+
+          },
+        },
+
       ]
     );
   };
 
-  // ── Loading ─────────────────────────────────────────────────────────────────
+
+  // ==========================================================
+  // INITIALS
+  // ==========================================================
+
+  const initials = name
+    ? name
+        .split(' ')
+        .map(word => word[0])
+        .slice(0, 2)
+        .join('')
+        .toUpperCase()
+    : '?';
+
+
+  // ==========================================================
+  // LOADING
+  // ==========================================================
+
   if (loading && !profile) {
+
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.PRIMARY} />
-          <Text style={styles.loadingText}>Loading dashboard…</Text>
+
+      <SafeAreaView
+        style={[
+          styles.container,
+          {
+            backgroundColor:
+              colors.background,
+          },
+        ]}
+      >
+
+        <View
+          style={[
+            styles.loadingContainer,
+            {
+              backgroundColor:
+                colors.background,
+            },
+          ]}
+        >
+
+          <ActivityIndicator
+            size="large"
+            color={colors.primary}
+          />
+
+          <Text
+            style={[
+              styles.loadingText,
+              {
+                color:
+                  colors.textSecondary,
+              },
+            ]}
+          >
+            Loading profile...
+          </Text>
+
         </View>
+
       </SafeAreaView>
+
     );
   }
 
-  // ── Render ──────────────────────────────────────────────────────────────────
-  const initials = name ? name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase() : '?';
+
+  // ==========================================================
+  // UI
+  // ==========================================================
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Toast visible={toastVisible} message={toastMessage} type={toastType} onHide={() => setToastVisible(false)} />
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+    <SafeAreaView
+      style={[
+        styles.container,
+        {
+          backgroundColor:
+            colors.background,
+        },
+      ]}
+    >
+
+      <Toast
+        visible={toastVisible}
+        message={toastMessage}
+        type={toastType}
+        onHide={() =>
+          setToastVisible(false)
+        }
+      />
+
+
+      <KeyboardAvoidingView
+        behavior={
+          Platform.OS === 'ios'
+            ? 'padding'
+            : 'height'
+        }
+        style={{ flex: 1 }}
+      >
+
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={
+            styles.scrollContent
+          }
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.headerTop}>
-              <Text style={styles.headerTitle}>Profile Dashboard</Text>
-              <Pressable onPress={() => { setIsEditingPersonal(true); setIsEditingBusiness(true); }} hitSlop={12} style={styles.editBtn}>
-                 <Text style={styles.editBtnText}>Edit Profile</Text>
-              </Pressable>
+
+
+          {/* =================================================
+              HEADER
+          ================================================= */}
+
+          <View
+            style={[
+              styles.header,
+              {
+                backgroundColor:
+                  colors.header,
+
+                borderBottomColor:
+                  colors.border,
+              },
+            ]}
+          >
+
+            <View
+              style={styles.headerTop}
+            >
+
+              <View>
+
+                <Text
+                  style={[
+                    styles.headerEyebrow,
+                    {
+                      color:
+                        colors.textSecondary,
+                    },
+                  ]}
+                >
+                  ACCOUNT
+                </Text>
+
+                <Text
+                  style={[
+                    styles.headerTitle,
+                    {
+                      color:
+                        colors.text,
+                    },
+                  ]}
+                >
+                  Profile Dashboard
+                </Text>
+
+              </View>
+
             </View>
 
-            <View style={styles.profileMeta}>
-              <Pressable onPress={handlePickImage} style={styles.avatarContainer}>
+
+            {/* =================================================
+                HORIZONTAL PROFILE CARD
+            ================================================= */}
+
+            <View
+              style={[
+                styles.profileSummaryCard,
+                {
+                  backgroundColor:
+                    colors.surfaceElevated,
+
+                  borderColor:
+                    colors.border,
+
+                  shadowColor:
+                    isDarkMode
+                      ? '#000'
+                      : '#64748B',
+                },
+              ]}
+            >
+
+              {/* Avatar */}
+
+              <Pressable
+                onPress={
+                  handlePickImage
+                }
+                style={
+                  styles.avatarContainer
+                }
+              >
+
                 {profileImage ? (
-                  <Image source={{ uri: profileImage }} style={styles.avatarCircle} />
+
+                  <Image
+                    source={{
+                      uri: profileImage,
+                    }}
+                    style={[
+                      styles.avatarCircle,
+                      {
+                        borderColor:
+                          theme.sellerPrimary ||
+                          colors.primary,
+                      },
+                    ]}
+                  />
+
                 ) : (
-                  <View style={styles.avatarCircle}>
-                    <Text style={styles.avatarText}>{initials}</Text>
+
+                  <View
+                    style={[
+                      styles.avatarCircle,
+                      {
+                        backgroundColor:
+                          isDarkMode
+                            ? '#1C3154'
+                            : '#EEF4FF',
+
+                        borderColor:
+                          theme.sellerPrimary ||
+                          colors.primary,
+                      },
+                    ]}
+                  >
+
+                    <Text
+                      style={[
+                        styles.avatarText,
+                        {
+                          color:
+                            theme.sellerPrimary ||
+                            colors.primary,
+                        },
+                      ]}
+                    >
+                      {initials}
+                    </Text>
+
                   </View>
+
                 )}
-                {(isEditingPersonal || isEditingBusiness) && (
-                  <View style={styles.avatarEditIcon}>
-                    <Ionicons name="camera" size={14} color="#FFF" />
-                  </View>
-                )}
+
+
+                <View
+                  style={[
+                    styles.avatarEditIcon,
+                    {
+                      backgroundColor:
+                        theme.sellerPrimary ||
+                        colors.primary,
+
+                      borderColor:
+                        colors.surfaceElevated,
+                    },
+                  ]}
+                >
+
+                  <Ionicons
+                    name="camera"
+                    size={12}
+                    color="#FFFFFF"
+                  />
+
+                </View>
+
               </Pressable>
-              
-              <Text style={styles.profileName}>{name || '—'}</Text>
-              <Text style={styles.profileBusiness}>{businessName || 'Business not set'}</Text>
-              
-              <View style={styles.verifiedBadge}>
-                <Ionicons name="shield-checkmark" size={14} color="#16A34A" />
-                <Text style={styles.verifiedText}>Verified Seller</Text>
+
+
+              {/* Seller information */}
+
+              <View
+                style={
+                  styles.profileTextContainer
+                }
+              >
+
+                <Text
+                  style={[
+                    styles.profileName,
+                    {
+                      color:
+                        colors.text,
+                    },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {name || 'Seller Name'}
+                </Text>
+
+
+                <Text
+                  style={[
+                    styles.profileBusiness,
+                    {
+                      color:
+                        colors.textSecondary,
+                    },
+                  ]}
+                  numberOfLines={2}
+                >
+                  {businessName ||
+                    'Business Name'}
+                </Text>
+
+
+                <View
+                  style={[
+                    styles.verifiedBadge,
+                    {
+                      backgroundColor:
+                        colors.successBg,
+
+                      borderColor:
+                        colors.successBorder,
+                    },
+                  ]}
+                >
+
+                  <Ionicons
+                    name="shield-checkmark"
+                    size={12}
+                    color={colors.success}
+                  />
+
+                  <Text
+                    style={[
+                      styles.verifiedText,
+                      {
+                        color:
+                          colors.success,
+                      },
+                    ]}
+                  >
+                    Verified Business
+                  </Text>
+
+                </View>
+
               </View>
-              
-              <View style={styles.contactInfoWrapper}>
-                <View style={styles.contactRow}>
-                  <Ionicons name="location-outline" size={16} color={COLORS.TEXT_SECONDARY} />
-                  <Text style={styles.contactText}>{city || 'Location not set'}</Text>
-                </View>
-                <View style={styles.contactRow}>
-                  <Ionicons name="mail-outline" size={16} color={COLORS.TEXT_SECONDARY} />
-                  <Text style={styles.contactText}>{email || '—'}</Text>
-                </View>
-                <View style={styles.contactRow}>
-                  <Ionicons name="call-outline" size={16} color={COLORS.TEXT_SECONDARY} />
-                  <Text style={styles.contactText}>{phone || '—'}</Text>
-                </View>
-              </View>
+
             </View>
+
           </View>
 
-          <View style={styles.content}>
-            {/* Analytics Dashboard */}
-            <Text style={styles.sectionTitle}>Business Analytics</Text>
-            <View style={styles.analyticsGrid}>
-              <AnalyticsCard icon="megaphone-outline" color="#1A73E8" value={analytics?.campaigns_created || 0} label="Campaigns Created" />
-              <AnalyticsCard icon="flash-outline" color="#16A34A" value={analytics?.active_campaigns || 0} label="Active Campaigns" />
-              <AnalyticsCard icon="people-outline" color="#F59E0B" value={analytics?.total_leads || 0} label="Total Leads" />
-            </View>
 
-            {/* Personal Information */}
-            <View style={styles.cardHeaderRow}>
-              <Text style={styles.sectionTitle}>Personal Information</Text>
-              {!isEditingPersonal && (
-                <Pressable onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setIsEditingPersonal(true); }}>
-                  <Text style={styles.editText}>Edit</Text>
-                </Pressable>
-              )}
-            </View>
-            <View style={styles.card}>
-              <EditableField label="Full Name" value={name} onChangeText={setName} editable={isEditingPersonal} />
-              <EditableField label="Email Address" value={email} editable={false} note="Contact support to change email" />
-              <EditableField label="Phone Number" value={phone} onChangeText={(t) => setPhone(t.replace(/[^0-9]/g, ''))} editable={isEditingPersonal} keyboardType="phone-pad" />
-              
-              <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>Password</Text>
-                <View style={[styles.inputWrapper, styles.inputWrapperDisabled, { justifyContent: 'space-between' }]}>
-                  <Text style={styles.passwordMask}>••••••••</Text>
-                  <Pressable onPress={() => setShowPasswordModal(true)}>
-                    <Text style={styles.changePasswordText}>Change Password</Text>
-                  </Pressable>
-                </View>
-              </View>
-            </View>
+          {/* =================================================
+              MAIN CONTENT
+          ================================================= */}
 
-            {/* Business Information */}
-            <View style={styles.cardHeaderRow}>
-              <Text style={styles.sectionTitle}>Business Information</Text>
-              {!isEditingBusiness && (
-                <Pressable onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setIsEditingBusiness(true); }}>
-                  <Text style={styles.editText}>Edit</Text>
-                </Pressable>
-              )}
-            </View>
-            <View style={styles.card}>
-              <EditableField label="Business Name" value={businessName} onChangeText={setBusinessName} editable={isEditingBusiness} />
-              <EditableField label="Business Category" value={category} editable={false} note="Cannot be changed after registration." />
-              
-              <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>Business Description</Text>
-                <View style={[styles.multilineCard, !isEditingBusiness && styles.multilineCardDisabled]}>
-                  <TextInput
-                    style={[styles.multilineInput, !isEditingBusiness && styles.multilineInputDisabled]}
-                    value={businessDescription}
-                    onChangeText={setBusinessDescription}
-                    editable={isEditingBusiness}
-                    multiline
-                    numberOfLines={4}
-                    textAlignVertical="top"
-                    placeholder="E.g., We provide digital marketing..."
-                    placeholderTextColor="#94A3B8"
-                  />
-                </View>
-              </View>
+          <View
+            style={styles.content}
+          >
 
-              <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>What makes your business different?</Text>
-                <View style={[styles.multilineCard, !isEditingBusiness && styles.multilineCardDisabled]}>
-                  <TextInput
-                    style={[styles.multilineInput, !isEditingBusiness && styles.multilineInputDisabled]}
-                    value={usp}
-                    onChangeText={setUsp}
-                    editable={isEditingBusiness}
-                    multiline
-                    numberOfLines={3}
-                    textAlignVertical="top"
-                    placeholder="Describe your unique selling proposition..."
-                    placeholderTextColor="#94A3B8"
-                  />
-                </View>
-              </View>
-              
-              <EditableField label="Website (optional)" value={website} onChangeText={setWebsite} editable={isEditingBusiness} />
-              <EditableField label="GST Number (optional)" value={gstNumber} onChangeText={setGstNumber} editable={isEditingBusiness} />
-            </View>
 
-            {/* Dedicated Location Card */}
-            <View style={styles.cardHeaderRow}>
-              <Text style={styles.sectionTitle}>Location Information</Text>
-              {!isEditingBusiness && (
-                <Pressable onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setIsEditingBusiness(true); }}>
-                  <Text style={styles.editText}>Edit</Text>
-                </Pressable>
-              )}
-            </View>
-            <View style={styles.card}>
-              <View style={styles.currentLocationDisplay}>
-                <Ionicons name="location" size={20} color={COLORS.PRIMARY} />
-                <Text style={styles.currentLocationText}>
-                  {locationData ? locationData.address : (locationAddress || 'No location set')}
+            {/* =================================================
+                ANALYTICS
+            ================================================= */}
+
+            <View
+              style={
+                styles.sectionHeader
+              }
+            >
+
+              <View>
+
+                <Text
+                  style={[
+                    styles.sectionTitle,
+                    {
+                      color:
+                        colors.text,
+                    },
+                  ]}
+                >
+                  Business Analytics
                 </Text>
+
+                <Text
+                  style={[
+                    styles.sectionSubtitle,
+                    {
+                      color:
+                        colors.textMuted,
+                    },
+                  ]}
+                >
+                  Overview of your business activity
+                </Text>
+
               </View>
+
+              <Pressable
+                onPress={() =>
+                  navigation.navigate(
+                    'SellerAnalytics'
+                  )
+                }
+              >
+
+                <Ionicons
+                  name="chevron-forward"
+                  size={20}
+                  color={
+                    colors.placeholder
+                  }
+                />
+
+              </Pressable>
+
+            </View>
+
+
+            <View
+              style={
+                styles.analyticsGrid
+              }
+            >
+
+              <AnalyticsCard
+                icon="megaphone-outline"
+                iconColor="#3B82F6"
+                value={
+                  analytics?.campaigns_created ||
+                  0
+                }
+                label="Campaigns"
+                colors={colors}
+              />
+
+              <AnalyticsCard
+                icon="flash-outline"
+                iconColor="#22C55E"
+                value={
+                  analytics?.active_campaigns ||
+                  0
+                }
+                label="Active"
+                colors={colors}
+              />
+
+              <AnalyticsCard
+                icon="people-outline"
+                iconColor="#F59E0B"
+                value={
+                  analytics?.total_leads ||
+                  0
+                }
+                label="Leads"
+                colors={colors}
+              />
+
+            </View>
+
+
+            {/* =================================================
+                PERSONAL INFORMATION
+            ================================================= */}
+
+            <SectionHeader
+              title="Personal Information"
+              subtitle="Manage your personal account details"
+              colors={colors}
+              editing={isEditingPersonal}
+              onEdit={() => {
+                LayoutAnimation.configureNext(
+                  LayoutAnimation.Presets.easeInEaseOut
+                );
+
+                setIsEditingPersonal(true);
+              }}
+            />
+
+
+            <View
+              style={[
+                styles.card,
+                {
+                  backgroundColor:
+                    colors.surfaceElevated,
+
+                  borderColor:
+                    colors.border,
+                },
+              ]}
+            >
+
+              <EditableField
+                colors={colors}
+                label="Full Name"
+                value={name}
+                onChangeText={setName}
+                editable={isEditingPersonal}
+              />
+
+
+              <EditableField
+                colors={colors}
+                label="Mobile Number"
+                value={phone}
+                editable={false}
+                note="Contact support to change your registered mobile number."
+              />
+
+
+              <EditableField
+                colors={colors}
+                label="Email Address"
+                value={email}
+                editable={false}
+              />
+
+
+              <View
+                style={
+                  styles.fieldGroup
+                }
+              >
+
+                <Text
+                  style={[
+                    styles.fieldLabel,
+                    {
+                      color:
+                        colors.textSecondary,
+                    },
+                  ]}
+                >
+                  Password
+                </Text>
+
+
+                <View
+                  style={[
+                    styles.inputWrapper,
+                    {
+                      backgroundColor:
+                        colors.input,
+
+                      borderColor:
+                        colors.border,
+                    },
+                  ]}
+                >
+
+                  <Text
+                    style={[
+                      styles.passwordMask,
+                      {
+                        color:
+                          colors.text,
+                      },
+                    ]}
+                  >
+                    ••••••••
+                  </Text>
+
+
+                  <Pressable
+                    onPress={() =>
+                      navigation.navigate(
+                        'SellerChangePasswordScreen'
+                      )
+                    }
+                    style={
+                      styles.changePasswordButton
+                    }
+                  >
+
+                    <Text
+                      style={[
+                        styles.changePasswordText,
+                        {
+                          color:
+                            colors.primaryBlue,
+                        },
+                      ]}
+                    >
+                      Change
+                    </Text>
+
+                  </Pressable>
+
+                </View>
+
+              </View>
+
+            </View>
+
+
+            {/* =================================================
+                BUSINESS INFORMATION
+            ================================================= */}
+
+            <SectionHeader
+              title="Business Information"
+              subtitle="Keep your business details up to date"
+              colors={colors}
+              editing={isEditingBusiness}
+              onEdit={() => {
+                LayoutAnimation.configureNext(
+                  LayoutAnimation.Presets.easeInEaseOut
+                );
+
+                setIsEditingBusiness(true);
+              }}
+            />
+
+
+            <View
+              style={[
+                styles.card,
+                {
+                  backgroundColor:
+                    colors.surfaceElevated,
+
+                  borderColor:
+                    colors.border,
+                },
+              ]}
+            >
+
+              <EditableField
+                colors={colors}
+                label="Business Name"
+                value={businessName}
+                onChangeText={
+                  setBusinessName
+                }
+                editable={
+                  isEditingBusiness
+                }
+              />
+
+
+              <EditableField
+                colors={colors}
+                label="Business Category"
+                value={category}
+                editable={false}
+                note="Cannot be changed after registration."
+              />
+
+
+              <MultilineField
+                colors={colors}
+                label="Business Description"
+                value={businessDescription}
+                onChangeText={
+                  setBusinessDescription
+                }
+                editable={
+                  isEditingBusiness
+                }
+                placeholder="Describe your business..."
+                numberOfLines={4}
+              />
+
+
+              <MultilineField
+                colors={colors}
+                label="What makes your business different?"
+                value={usp}
+                onChangeText={setUsp}
+                editable={
+                  isEditingBusiness
+                }
+                placeholder="Describe your unique selling proposition..."
+                numberOfLines={3}
+              />
+
+
+              <EditableField
+                colors={colors}
+                label="Website (optional)"
+                value={website}
+                onChangeText={setWebsite}
+                editable={
+                  isEditingBusiness
+                }
+              />
+
+
+              <EditableField
+                colors={colors}
+                label="GST Number (optional)"
+                value={gstNumber}
+                onChangeText={setGstNumber}
+                editable={
+                  isEditingBusiness
+                }
+              />
+
+            </View>
+
+
+            {/* =================================================
+                LOCATION
+            ================================================= */}
+
+            <SectionHeader
+              title="Location"
+              subtitle="Manage your business location"
+              colors={colors}
+              editing={isEditingBusiness}
+              onEdit={() =>
+                setIsEditingBusiness(true)
+              }
+            />
+
+
+            <View
+              style={[
+                styles.card,
+                {
+                  backgroundColor:
+                    colors.surfaceElevated,
+
+                  borderColor:
+                    colors.border,
+                },
+              ]}
+            >
+
+              <View
+                style={[
+                  styles.locationDisplay,
+                  {
+                    backgroundColor:
+                      colors.blueSoft,
+
+                    borderColor:
+                      colors.border,
+                  },
+                ]}
+              >
+
+                <View
+                  style={[
+                    styles.locationIcon,
+                    {
+                      backgroundColor:
+                        colors.primarySofter,
+                    },
+                  ]}
+                >
+
+                  <Ionicons
+                    name="location"
+                    size={20}
+                    color={
+                      colors.primaryBlue
+                    }
+                  />
+
+                </View>
+
+
+                <Text
+                  style={[
+                    styles.locationText,
+                    {
+                      color:
+                        colors.text,
+                    },
+                  ]}
+                  numberOfLines={3}
+                >
+                  {locationData
+                    ? locationData.address
+                    : locationAddress ||
+                      'No location set'}
+                </Text>
+
+              </View>
+
 
               {isEditingBusiness && (
-                <View style={styles.locationActions}>
-                  <Text style={styles.fieldLabel}>Current Location</Text>
-                  
+
+                <View
+                  style={
+                    styles.locationActions
+                  }
+                >
+
                   {showLocationPicker ? (
-                     <BusinessLocationPicker
-                      onLocationConfirmed={(data) => {
-                        setLocationData(data);
-                        setShowLocationPicker(false);
-                      }}
-                      initialAddress={locationAddress || ''}
+
+                    <BusinessLocationPicker
+                      onLocationConfirmed={
+                        data => {
+
+                          setLocationData(
+                            data
+                          );
+
+                          setShowLocationPicker(
+                            false
+                          );
+
+                        }
+                      }
+                      initialAddress={
+                        locationAddress ||
+                        ''
+                      }
                     />
+
                   ) : (
-                    <View style={styles.locationBtnRow}>
-                      <Pressable style={styles.outlineBtn} onPress={() => setShowLocationPicker(true)}>
-                        <Ionicons name="search-outline" size={16} color={COLORS.PRIMARY} style={{ marginRight: 6 }} />
-                        <Text style={styles.outlineBtnText}>Change Location</Text>
+
+                    <View
+                      style={
+                        styles.locationButtonRow
+                      }
+                    >
+
+                      <Pressable
+                        style={[
+                          styles.outlineButton,
+                          {
+                            borderColor:
+                              colors.primary,
+                            backgroundColor:
+                              colors.primarySofter,
+                          },
+                        ]}
+                        onPress={() =>
+                          setShowLocationPicker(
+                            true
+                          )
+                        }
+                      >
+
+                        <Ionicons
+                          name="search-outline"
+                          size={17}
+                          color={
+                            colors.primary
+                          }
+                        />
+
+                        <Text
+                          style={[
+                            styles.outlineButtonText,
+                            {
+                              color:
+                                colors.primary,
+                            },
+                          ]}
+                        >
+                          Change
+                        </Text>
+
                       </Pressable>
-                      <Pressable style={styles.outlineBtn} onPress={handleUseCurrentLocation}>
-                        {loading ? <ActivityIndicator size="small" color={COLORS.PRIMARY} /> : (
-                          <>
-                            <Ionicons name="navigate-outline" size={16} color={COLORS.PRIMARY} style={{ marginRight: 6 }} />
-                            <Text style={styles.outlineBtnText}>Use Current Location</Text>
-                          </>
-                        )}
+
+
+                      <Pressable
+                        style={[
+                          styles.outlineButton,
+                          {
+                            borderColor:
+                              colors.primaryBlue,
+                            backgroundColor:
+                              colors.blueSoft,
+                          },
+                        ]}
+                        onPress={
+                          handleUseCurrentLocation
+                        }
+                      >
+
+                        <Ionicons
+                          name="navigate-outline"
+                          size={17}
+                          color={
+                            colors.primaryBlue
+                          }
+                        />
+
+                        <Text
+                          style={[
+                            styles.outlineButtonText,
+                            {
+                              color:
+                                colors.primaryBlue,
+                            },
+                          ]}
+                        >
+                          Current
+                        </Text>
+
                       </Pressable>
+
                     </View>
+
                   )}
+
                 </View>
+
               )}
+
             </View>
 
-            {/* Account Settings */}
-            <Text style={styles.sectionTitle}>Account Settings</Text>
-            <View style={styles.card}>
-              <SettingsRow icon="chatbubble-ellipses-outline" title="Chat Settings" onPress={() => setShowChatSettingsModal(true)} />
-              <SettingsRow icon="notifications-outline" title="Notifications" onPress={() => showToast('Settings coming soon', 'info')} />
-              <SettingsRow icon="moon-outline" title="Dark Mode" onPress={() => showToast('Settings coming soon', 'info')} />
-              <SettingsRow icon="language-outline" title="Language" onPress={() => showToast('Settings coming soon', 'info')} />
-              <SettingsRow icon="shield-half-outline" title="Privacy Settings" onPress={() => showToast('Settings coming soon', 'info')} />
-              
-              <View style={styles.settingsDivider} />
-              
-              <SettingsRow icon="trash-outline" title="Delete Account" color="#EF4444" onPress={confirmDeleteAccount} hideArrow />
-              <SettingsRow icon="log-out-outline" title="Logout" color="#EF4444" onPress={logout} hideArrow />
+
+            {/* =================================================
+                ACCOUNT SETTINGS
+            ================================================= */}
+
+            <View
+              style={
+                styles.accountSettingsSection
+              }
+            >
+
+              <View
+                style={
+                  styles.accountSectionHeader
+                }
+              >
+
+                <Text
+                  style={[
+                    styles.accountSectionTitle,
+                    {
+                      color:
+                        colors.text,
+                    },
+                  ]}
+                >
+                  ACCOUNT SETTINGS
+                </Text>
+
+                <Text
+                  style={[
+                    styles.accountSectionSubtitle,
+                    {
+                      color:
+                        colors.textMuted,
+                    },
+                  ]}
+                >
+                  Manage your account preferences
+                </Text>
+
+              </View>
+
+
+              <View
+                style={[
+                  styles.settingsCard,
+                  {
+                    backgroundColor:
+                      colors.surfaceElevated,
+
+                    borderColor:
+                      colors.border,
+
+                    shadowColor:
+                      isDarkMode
+                        ? '#000'
+                        : '#64748B',
+                  },
+                ]}
+              >
+
+                <SettingsRow
+                  colors={colors}
+                  icon="person-outline"
+                  title="Edit Profile"
+                  subtitle="Update your personal information"
+                  onPress={() => {
+
+                    setIsEditingPersonal(
+                      true
+                    );
+
+                  }}
+                />
+
+
+                <SettingsDivider
+                  colors={colors}
+                />
+
+
+                <SettingsRow
+                  colors={colors}
+                  icon="lock-closed-outline"
+                  title="Change Password"
+                  subtitle="Update your account password"
+                  onPress={() =>
+                    navigation.navigate(
+                      'SellerChangePasswordScreen'
+                    )
+                  }
+                />
+
+
+                <SettingsDivider
+                  colors={colors}
+                />
+
+
+                <SettingsRow
+                  colors={colors}
+                  icon="briefcase-outline"
+                  title="Edit Business Details"
+                  subtitle="Manage your business information"
+                  onPress={() => {
+
+                    setIsEditingBusiness(
+                      true
+                    );
+
+                  }}
+                />
+
+
+                <SettingsDivider
+                  colors={colors}
+                />
+
+
+                <SettingsRow
+                  colors={colors}
+                  icon="bar-chart-outline"
+                  title="Analytics"
+                  subtitle="View business performance"
+                  onPress={() =>
+                    navigation.navigate(
+                      'SellerAnalytics'
+                    )
+                  }
+                />
+
+
+                <SettingsDivider
+                  colors={colors}
+                />
+
+
+                <SettingsRow
+                  colors={colors}
+                  icon="wallet-outline"
+                  title="Wallet"
+                  subtitle="Manage your earnings"
+                  onPress={() =>
+                    navigation.navigate(
+                      'SellerWallet'
+                    )
+                  }
+                />
+
+
+                <SettingsDivider
+                  colors={colors}
+                />
+
+
+                {/* DARK MODE */}
+
+                <View
+                  style={
+                    styles.settingsRow
+                  }
+                >
+
+                  <View
+                    style={
+                      styles.settingsRowLeft
+                    }
+                  >
+
+                    <View
+                      style={[
+                        styles.settingsIcon,
+                        {
+                          backgroundColor:
+                            colors.primarySofter,
+                        },
+                      ]}
+                    >
+
+                      <Ionicons
+                        name={
+                          isDarkMode
+                            ? 'moon-outline'
+                            : 'sunny-outline'
+                        }
+                        size={20}
+                        color={
+                          colors.primary
+                        }
+                      />
+
+                    </View>
+
+
+                    <View
+                      style={
+                        styles.settingsTextContainer
+                      }
+                    >
+
+                      <Text
+                        style={[
+                          styles.settingsTitle,
+                          {
+                            color:
+                              colors.text,
+                          },
+                        ]}
+                      >
+                        Dark Mode
+                      </Text>
+
+                      <Text
+                        style={[
+                          styles.settingsSubtitle,
+                          {
+                            color:
+                              colors.textMuted,
+                          },
+                        ]}
+                      >
+                        Use the dark appearance
+                      </Text>
+
+                    </View>
+
+                  </View>
+
+
+                  <Switch
+                    value={isDarkMode}
+                    onValueChange={
+                      toggleDarkMode
+                    }
+                    trackColor={{
+                      false:
+                        isDarkMode
+                          ? '#334155'
+                          : '#CBD5E1',
+
+                      true:
+                        colors.primary,
+                    }}
+                    thumbColor="#FFFFFF"
+                  />
+
+                </View>
+
+
+                <SettingsDivider
+                  colors={colors}
+                />
+
+
+                <SettingsRow
+                  colors={colors}
+                  icon="chatbubble-ellipses-outline"
+                  title="Chat Settings"
+                  subtitle="Manage chat history"
+                  onPress={() =>
+                    setShowChatSettingsModal(
+                      true
+                    )
+                  }
+                />
+
+
+                <SettingsDivider
+                  colors={colors}
+                />
+
+
+                <SettingsRow
+                  colors={colors}
+                  icon="notifications-outline"
+                  title="Notifications"
+                  subtitle="Manage notification preferences"
+                  onPress={() =>
+                    showToast(
+                      'Settings coming soon',
+                      'info'
+                    )
+                  }
+                />
+
+
+                <SettingsDivider
+                  colors={colors}
+                />
+
+
+                <SettingsRow
+                  colors={colors}
+                  icon="language-outline"
+                  title="Language"
+                  subtitle="Choose your preferred language"
+                  onPress={() =>
+                    showToast(
+                      'Settings coming soon',
+                      'info'
+                    )
+                  }
+                />
+
+
+                <SettingsDivider
+                  colors={colors}
+                />
+
+
+                <SettingsRow
+                  colors={colors}
+                  icon="shield-half-outline"
+                  title="Privacy Settings"
+                  subtitle="Manage privacy preferences"
+                  onPress={() =>
+                    showToast(
+                      'Settings coming soon',
+                      'info'
+                    )
+                  }
+                />
+
+
+                <SettingsDivider
+                  colors={colors}
+                />
+
+
+                <SettingsRow
+                  colors={colors}
+                  icon="help-buoy-outline"
+                  title="Help & Support"
+                  subtitle="Get help with REACHLO"
+                  onPress={() =>
+                    navigation.navigate(
+                      'HelpSupport'
+                    )
+                  }
+                />
+
+
+                <SettingsDivider
+                  colors={colors}
+                />
+
+
+                <SettingsRow
+                  colors={colors}
+                  icon="shield-checkmark-outline"
+                  title="Privacy Policy"
+                  subtitle="Read our privacy policy"
+                  onPress={() =>
+                    navigation.navigate(
+                      'PrivacyPolicy'
+                    )
+                  }
+                />
+
+
+                <SettingsDivider
+                  colors={colors}
+                />
+
+
+                <SettingsRow
+                  colors={colors}
+                  icon="information-circle-outline"
+                  title="About REACHLO"
+                  subtitle="Learn more about REACHLO"
+                  onPress={() =>
+                    navigation.navigate(
+                      'AboutReachlo'
+                    )
+                  }
+                />
+
+
+                <SettingsDivider
+                  colors={colors}
+                />
+
+
+                <SettingsRow
+                  colors={colors}
+                  icon="star-outline"
+                  title="Rate REACHLO"
+                  subtitle="Share your feedback"
+                  onPress={() =>
+                    setShowRatingModal(
+                      true
+                    )
+                  }
+                />
+
+              </View>
+
             </View>
-            
-            {/* Help & Support */}
-            <Text style={styles.sectionTitle}>Help & Support</Text>
-            <View style={styles.card}>
-              <SettingsRow icon="help-buoy-outline" title="Help & Support" onPress={() => navigation.navigate('HelpSupport')} />
-              <SettingsRow icon="information-circle-outline" title="About REACHLO" onPress={() => navigation.navigate('AboutReachlo')} />
-              <SettingsRow icon="shield-checkmark-outline" title="Privacy Policy" onPress={() => navigation.navigate('PrivacyPolicy')} />
-              <SettingsRow icon="star-outline" title="Rate REACHLO" onPress={() => setShowRatingModal(true)} />
+
+
+            {/* =================================================
+                DANGER ACTIONS
+            ================================================= */}
+
+            <View
+              style={
+                styles.destructiveActions
+              }
+            >
+
+              <Pressable
+                style={[
+                  styles.destructiveButton,
+                  {
+                    backgroundColor:
+                      colors.dangerBg,
+
+                    borderColor:
+                      colors.dangerBorder,
+                  },
+                ]}
+                onPress={logout}
+              >
+
+                <View
+                  style={[
+                    styles.destructiveIcon,
+                    {
+                      backgroundColor:
+                        isDarkMode
+                          ? '#431D20'
+                          : '#FEE2E2',
+                    },
+                  ]}
+                >
+
+                  <Ionicons
+                    name="log-out-outline"
+                    size={19}
+                    color={colors.danger}
+                  />
+
+                </View>
+
+                <Text
+                  style={[
+                    styles.destructiveText,
+                    {
+                      color:
+                        colors.danger,
+                    },
+                  ]}
+                >
+                  Log Out
+                </Text>
+
+              </Pressable>
+
+
+              <Pressable
+                style={[
+                  styles.destructiveButton,
+                  {
+                    backgroundColor:
+                      colors.dangerBg,
+
+                    borderColor:
+                      colors.dangerBorder,
+                  },
+                ]}
+                onPress={
+                  confirmDeleteAccount
+                }
+              >
+
+                <View
+                  style={[
+                    styles.destructiveIcon,
+                    {
+                      backgroundColor:
+                        isDarkMode
+                          ? '#431D20'
+                          : '#FEE2E2',
+                    },
+                  ]}
+                >
+
+                  <Ionicons
+                    name="trash-outline"
+                    size={19}
+                    color={colors.danger}
+                  />
+
+                </View>
+
+                <Text
+                  style={[
+                    styles.destructiveText,
+                    {
+                      color:
+                        colors.danger,
+                    },
+                  ]}
+                >
+                  Delete Account
+                </Text>
+
+              </Pressable>
+
             </View>
-            
+
+
+            <View
+              style={{
+                height: 120,
+              }}
+            />
+
           </View>
-          <View style={{ height: 100 }} />
+
         </ScrollView>
+
       </KeyboardAvoidingView>
 
-      {/* Action Buttons (Save/Cancel) */}
-      {(isEditingPersonal || isEditingBusiness) && (
-        <Animated.View style={[styles.bottomBar, {
-          transform: [{ translateY: saveAnim.interpolate({ inputRange: [0, 1], outputRange: [120, 0] }) }],
-          opacity: saveAnim,
-        }]}>
-          <Pressable style={styles.cancelBtn} onPress={handleCancel}>
-            <Text style={styles.cancelBtnText}>Cancel</Text>
-          </Pressable>
+
+      {/* ========================================================
+          SAVE / CANCEL BAR
+      ======================================================== */}
+
+      {(isEditingPersonal ||
+        isEditingBusiness) && (
+
+        <Animated.View
+          style={[
+            styles.bottomBar,
+
+            {
+              backgroundColor:
+                colors.surface,
+
+              borderTopColor:
+                colors.border,
+
+              transform: [
+                {
+                  translateY:
+                    saveAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [
+                        140,
+                        0,
+                      ],
+                    }),
+                },
+              ],
+
+              opacity: saveAnim,
+            },
+          ]}
+        >
+
           <Pressable
-            style={[styles.saveBtnContainer, !hasChanges() && { opacity: 0.5 }]}
-            onPress={handleSave}
-            disabled={saving || !hasChanges()}
+            style={[
+              styles.cancelButton,
+              {
+                backgroundColor:
+                  colors.input,
+
+                borderColor:
+                  colors.border,
+              },
+            ]}
+            onPress={
+              handleCancel
+            }
           >
-            <LinearGradient
-              colors={['#1A73E8', '#0EA5E9']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.saveBtnGradient}
+
+            <Text
+              style={[
+                styles.cancelButtonText,
+                {
+                  color:
+                    colors.textSecondary,
+                },
+              ]}
             >
-              {saving ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.saveBtnText}>Save Changes</Text>}
-            </LinearGradient>
+              Cancel
+            </Text>
+
           </Pressable>
+
+
+          <Pressable
+            style={[
+              styles.saveButton,
+              !hasChanges() && {
+                opacity: 0.5,
+              },
+            ]}
+            onPress={
+              handleSave
+            }
+            disabled={
+              saving ||
+              !hasChanges()
+            }
+          >
+
+            <LinearGradient
+              colors={[
+                '#3B82F6',
+                '#8B5CF6',
+              ]}
+              start={{
+                x: 0,
+                y: 0,
+              }}
+              end={{
+                x: 1,
+                y: 0,
+              }}
+              style={
+                styles.saveGradient
+              }
+            >
+
+              {saving ? (
+
+                <ActivityIndicator
+                  size="small"
+                  color="#FFFFFF"
+                />
+
+              ) : (
+
+                <>
+
+                  <Ionicons
+                    name="checkmark-circle-outline"
+                    size={19}
+                    color="#FFFFFF"
+                  />
+
+                  <Text
+                    style={
+                      styles.saveButtonText
+                    }
+                  >
+                    Save Changes
+                  </Text>
+
+                </>
+
+              )}
+
+            </LinearGradient>
+
+          </Pressable>
+
         </Animated.View>
+
       )}
 
-      {/* Change Password Modal */}
-      <Modal visible={showPasswordModal} animationType="slide" transparent>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Change Password</Text>
-              <Pressable onPress={() => setShowPasswordModal(false)}>
-                <Ionicons name="close" size={24} color="#0F172A" />
-              </Pressable>
-            </View>
-            <EditableField label="Current Password" value={currentPassword} onChangeText={setCurrentPassword} secureTextEntry />
-            <EditableField label="New Password" value={newPassword} onChangeText={setNewPassword} secureTextEntry />
-            <EditableField label="Confirm Password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry />
-            
-            <Pressable style={styles.modalSaveBtn} onPress={handleChangePassword} disabled={savingPassword}>
-              <LinearGradient
-                colors={['#1A73E8', '#0EA5E9']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.saveBtnGradient}
-              >
-                {savingPassword ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.saveBtnText}>Update Password</Text>}
-              </LinearGradient>
-            </Pressable>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
 
-      {/* Chat Settings Modal */}
-      <Modal visible={showChatSettingsModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Chat Settings</Text>
-              <Pressable onPress={() => setShowChatSettingsModal(false)}>
-                <Ionicons name="close" size={24} color="#0F172A" />
-              </Pressable>
-            </View>
-            <Text style={{ fontSize: 14, color: '#475569', marginBottom: 16 }}>
-              Choose how long your chat history is retained on this device.
-            </Text>
-            
-            {['24h', '1w', '1m', 'forever'].map(policy => (
-              <Pressable 
-                key={policy} 
-                style={[
-                  styles.inputWrapper, 
-                  { marginBottom: 12, paddingHorizontal: 16 },
-                  chatRetention === policy ? { borderColor: '#1A73E8', backgroundColor: '#EFF6FF' } : {}
-                ]}
-                onPress={() => saveChatSettings(policy)}
-              >
-                <Text style={{ flex: 1, fontSize: 15, fontWeight: chatRetention === policy ? '600' : '400', color: '#0F172A' }}>
-                  {policy === '24h' ? '24 Hours' : policy === '1w' ? '1 Week' : policy === '1m' ? '1 Month' : 'Until I clear it (Forever)'}
+      {/* ========================================================
+          CHAT SETTINGS MODAL
+      ======================================================== */}
+
+      <Modal
+        visible={
+          showChatSettingsModal
+        }
+        animationType="slide"
+        transparent
+        onRequestClose={() =>
+          setShowChatSettingsModal(
+            false
+          )
+        }
+      >
+
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              backgroundColor:
+                isDarkMode
+                  ? 'rgba(0,0,0,0.72)'
+                  : 'rgba(15,23,42,0.55)',
+            },
+          ]}
+        >
+
+          <View
+            style={[
+              styles.modalContent,
+              {
+                backgroundColor:
+                  colors.surfaceElevated,
+
+                borderColor:
+                  colors.border,
+              },
+            ]}
+          >
+
+            <View
+              style={
+                styles.modalHandle
+              }
+            />
+
+            <View
+              style={
+                styles.modalHeader
+              }
+            >
+
+              <View>
+
+                <Text
+                  style={[
+                    styles.modalTitle,
+                    {
+                      color:
+                        colors.text,
+                    },
+                  ]}
+                >
+                  Chat Settings
                 </Text>
-                {chatRetention === policy && (
-                  <Ionicons name="checkmark-circle" size={20} color="#1A73E8" />
-                )}
-              </Pressable>
-            ))}
-          </View>
-        </View>
-      </Modal>
 
-      {/* FAQ Modal */}
-      <Modal visible={showFaqModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: '80%' }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Frequently Asked Questions</Text>
-              <Pressable onPress={() => setShowFaqModal(false)}>
-                <Ionicons name="close" size={24} color="#0F172A" />
+                <Text
+                  style={[
+                    styles.modalSubtitle,
+                    {
+                      color:
+                        colors.textSecondary,
+                    },
+                  ]}
+                >
+                  Manage chat history retention
+                </Text>
+
+              </View>
+
+
+              <Pressable
+                style={[
+                  styles.modalClose,
+                  {
+                    backgroundColor:
+                      colors.input,
+                  },
+                ]}
+                onPress={() =>
+                  setShowChatSettingsModal(
+                    false
+                  )
+                }
+              >
+
+                <Ionicons
+                  name="close"
+                  size={20}
+                  color={
+                    colors.text
+                  }
+                />
+
               </Pressable>
+
             </View>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
-              {FAQ_DATA.map((item, idx) => (
-                <FaqAccordionItem key={idx} question={item.question} answer={item.answer} />
-              ))}
-            </ScrollView>
+
+
+            {[
+              '24h',
+              '1w',
+              '1m',
+              'forever',
+            ].map(policy => {
+
+              const selected =
+                chatRetention ===
+                policy;
+
+
+              const label =
+                policy === '24h'
+                  ? '24 Hours'
+                  : policy === '1w'
+                  ? '1 Week'
+                  : policy === '1m'
+                  ? '1 Month'
+                  : 'Until I clear it';
+
+
+              return (
+
+                <Pressable
+                  key={policy}
+                  style={[
+                    styles.retentionOption,
+                    {
+                      backgroundColor:
+                        selected
+                          ? colors.primarySoft
+                          : colors.input,
+
+                      borderColor:
+                        selected
+                          ? colors.primary
+                          : colors.border,
+                    },
+                  ]}
+                  onPress={() =>
+                    saveChatSettings(
+                      policy
+                    )
+                  }
+                >
+
+                  <View
+                    style={[
+                      styles.retentionIcon,
+                      {
+                        backgroundColor:
+                          selected
+                            ? colors.primary
+                            : colors.surfaceSoft,
+                      },
+                    ]}
+                  >
+
+                    <Ionicons
+                      name={
+                        policy ===
+                        'forever'
+                          ? 'infinite-outline'
+                          : 'time-outline'
+                      }
+                      size={18}
+                      color={
+                        selected
+                          ? '#FFFFFF'
+                          : colors.primary
+                      }
+                    />
+
+                  </View>
+
+
+                  <View
+                    style={
+                      styles.retentionText
+                    }
+                  >
+
+                    <Text
+                      style={[
+                        styles.retentionTitle,
+                        {
+                          color:
+                            colors.text,
+                        },
+                      ]}
+                    >
+                      {label}
+                    </Text>
+
+                    {policy ===
+                      'forever' && (
+
+                      <Text
+                        style={[
+                          styles.retentionSubtitle,
+                          {
+                            color:
+                              colors.textMuted,
+                          },
+                        ]}
+                      >
+                        Keep messages until manually cleared
+                      </Text>
+
+                    )}
+
+                  </View>
+
+
+                  {selected && (
+
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={23}
+                      color={
+                        colors.primary
+                      }
+                    />
+
+                  )}
+
+                </Pressable>
+
+              );
+
+            })}
+
+
+            {savingChatSettings && (
+
+              <ActivityIndicator
+                size="small"
+                color={
+                  colors.primary
+                }
+                style={{
+                  marginTop: 8,
+                }}
+              />
+
+            )}
+
           </View>
+
         </View>
+
       </Modal>
 
-      <RatingModal 
-        visible={showRatingModal} 
-        onClose={() => setShowRatingModal(false)} 
-        userRole="seller" 
+
+      {/* ========================================================
+          FAQ MODAL
+      ======================================================== */}
+
+      <Modal
+        visible={showFaqModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() =>
+          setShowFaqModal(false)
+        }
+      >
+
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              backgroundColor:
+                isDarkMode
+                  ? 'rgba(0,0,0,0.72)'
+                  : 'rgba(15,23,42,0.55)',
+            },
+          ]}
+        >
+
+          <View
+            style={[
+              styles.faqModalContent,
+              {
+                backgroundColor:
+                  colors.surfaceElevated,
+
+                borderColor:
+                  colors.border,
+              },
+            ]}
+          >
+
+            <View
+              style={
+                styles.modalHandle
+              }
+            />
+
+            <View
+              style={
+                styles.modalHeader
+              }
+            >
+
+              <View>
+
+                <Text
+                  style={[
+                    styles.modalTitle,
+                    {
+                      color:
+                        colors.text,
+                    },
+                  ]}
+                >
+                  Frequently Asked Questions
+                </Text>
+
+                <Text
+                  style={[
+                    styles.modalSubtitle,
+                    {
+                      color:
+                        colors.textSecondary,
+                    },
+                  ]}
+                >
+                  Find answers to common questions
+                </Text>
+
+              </View>
+
+
+              <Pressable
+                style={[
+                  styles.modalClose,
+                  {
+                    backgroundColor:
+                      colors.input,
+                  },
+                ]}
+                onPress={() =>
+                  setShowFaqModal(
+                    false
+                  )
+                }
+              >
+
+                <Ionicons
+                  name="close"
+                  size={20}
+                  color={
+                    colors.text
+                  }
+                />
+
+              </Pressable>
+
+            </View>
+
+
+            <ScrollView
+              showsVerticalScrollIndicator={
+                false
+              }
+              contentContainerStyle={{
+                paddingBottom: 24,
+              }}
+            >
+
+              {FAQ_DATA.map(
+                (item, index) => (
+
+                  <FaqAccordionItem
+                    key={index}
+                    question={
+                      item.question
+                    }
+                    answer={
+                      item.answer
+                    }
+                    colors={colors}
+                  />
+
+                )
+              )}
+
+            </ScrollView>
+
+          </View>
+
+        </View>
+
+      </Modal>
+
+
+      {/* ========================================================
+          RATING
+      ======================================================== */}
+
+      <RatingModal
+        visible={
+          showRatingModal
+        }
+        onClose={() =>
+          setShowRatingModal(
+            false
+          )
+        }
+        userRole="seller"
       />
 
     </SafeAreaView>
+
   );
 }
 
-// ── Components ────────────────────────────────────────────────────────────────
+
+// ============================================================
+// SECTION HEADER
+// ============================================================
+
+function SectionHeader({
+  title,
+  subtitle,
+  colors,
+  editing,
+  onEdit,
+}) {
+
+  return (
+
+    <View
+      style={
+        styles.sectionHeader
+      }
+    >
+
+      <View
+        style={{
+          flex: 1,
+          paddingRight: 12,
+        }}
+      >
+
+        <Text
+          style={[
+            styles.sectionTitle,
+            {
+              color:
+                colors.text,
+            },
+          ]}
+        >
+          {title}
+        </Text>
+
+        {subtitle && (
+
+          <Text
+            style={[
+              styles.sectionSubtitle,
+              {
+                color:
+                  colors.textMuted,
+              },
+            ]}
+          >
+            {subtitle}
+          </Text>
+
+        )}
+
+      </View>
+
+
+      {!editing && (
+
+        <Pressable
+          style={[
+            styles.editPill,
+            {
+              backgroundColor:
+                colors.primarySofter,
+            },
+          ]}
+          onPress={onEdit}
+        >
+
+          <Ionicons
+            name="create-outline"
+            size={15}
+            color={
+              colors.primary
+            }
+          />
+
+          <Text
+            style={[
+              styles.editPillText,
+              {
+                color:
+                  colors.primary,
+              },
+            ]}
+          >
+            Edit
+          </Text>
+
+        </Pressable>
+
+      )}
+
+    </View>
+
+  );
+}
+
+
+// ============================================================
+// ANALYTICS CARD
+// ============================================================
+
+function AnalyticsCard({
+  icon,
+  iconColor,
+  value,
+  label,
+  colors,
+}) {
+
+  return (
+
+    <View
+      style={[
+        styles.analyticsCard,
+        {
+          backgroundColor:
+            colors.surfaceElevated,
+
+          borderColor:
+            colors.border,
+        },
+      ]}
+    >
+
+      <View
+        style={[
+          styles.analyticsIcon,
+          {
+            backgroundColor:
+              `${iconColor}18`,
+          },
+        ]}
+      >
+
+        <Ionicons
+          name={icon}
+          size={21}
+          color={iconColor}
+        />
+
+      </View>
+
+
+      <Text
+        style={[
+          styles.analyticsValue,
+          {
+            color:
+              colors.text,
+          },
+        ]}
+      >
+        {value}
+      </Text>
+
+
+      <Text
+        style={[
+          styles.analyticsLabel,
+          {
+            color:
+              colors.textSecondary,
+          },
+        ]}
+      >
+        {label}
+      </Text>
+
+    </View>
+
+  );
+}
+
+
+// ============================================================
+// EDITABLE FIELD
+// ============================================================
+
+function EditableField({
+  label,
+  value,
+  onChangeText,
+  editable = true,
+  note,
+  colors,
+}) {
+
+  return (
+
+    <View
+      style={
+        styles.fieldGroup
+      }
+    >
+
+      <Text
+        style={[
+          styles.fieldLabel,
+          {
+            color:
+              colors.textSecondary,
+          },
+        ]}
+      >
+        {label}
+      </Text>
+
+
+      <View
+        style={[
+          styles.inputWrapper,
+          {
+            backgroundColor:
+              editable
+                ? colors.inputPressed
+                : colors.input,
+
+            borderColor:
+              editable
+                ? colors.borderStrong
+                : colors.border,
+          },
+        ]}
+      >
+
+        <TextInput
+          style={[
+            styles.textInput,
+            {
+              color:
+                editable
+                  ? colors.text
+                  : colors.textSecondary,
+            },
+          ]}
+          value={value}
+          onChangeText={
+            onChangeText
+          }
+          editable={editable}
+          placeholderTextColor={
+            colors.placeholder
+          }
+        />
+
+        {!editable && (
+
+          <Ionicons
+            name="lock-closed-outline"
+            size={16}
+            color={
+              colors.textMuted
+            }
+          />
+
+        )}
+
+      </View>
+
+
+      {note && (
+
+        <Text
+          style={[
+            styles.fieldNote,
+            {
+              color:
+                colors.textMuted,
+            },
+          ]}
+        >
+          {note}
+        </Text>
+
+      )}
+
+    </View>
+
+  );
+}
+
+
+// ============================================================
+// MULTILINE FIELD
+// ============================================================
+
+function MultilineField({
+  label,
+  value,
+  onChangeText,
+  editable,
+  placeholder,
+  numberOfLines,
+  colors,
+}) {
+
+  return (
+
+    <View
+      style={
+        styles.fieldGroup
+      }
+    >
+
+      <Text
+        style={[
+          styles.fieldLabel,
+          {
+            color:
+              colors.textSecondary,
+          },
+        ]}
+      >
+        {label}
+      </Text>
+
+
+      <View
+        style={[
+          styles.multilineWrapper,
+          {
+            backgroundColor:
+              editable
+                ? colors.inputPressed
+                : colors.input,
+
+            borderColor:
+              editable
+                ? colors.borderStrong
+                : colors.border,
+          },
+        ]}
+      >
+
+        <TextInput
+          style={[
+            styles.multilineInput,
+            {
+              color:
+                editable
+                  ? colors.text
+                  : colors.textSecondary,
+            },
+          ]}
+          value={value}
+          onChangeText={
+            onChangeText
+          }
+          editable={editable}
+          multiline
+          numberOfLines={
+            numberOfLines
+          }
+          textAlignVertical="top"
+          placeholder={
+            placeholder
+          }
+          placeholderTextColor={
+            colors.placeholder
+          }
+        />
+
+      </View>
+
+    </View>
+
+  );
+}
+
+
+// ============================================================
+// SETTINGS ROW
+// ============================================================
+
+function SettingsRow({
+  icon,
+  title,
+  subtitle,
+  onPress,
+  colors,
+}) {
+
+  return (
+
+    <Pressable
+      style={({ pressed }) => [
+        styles.settingsRow,
+
+        pressed && {
+          opacity: 0.72,
+        },
+      ]}
+      onPress={onPress}
+    >
+
+      <View
+        style={
+          styles.settingsRowLeft
+        }
+      >
+
+        <View
+          style={[
+            styles.settingsIcon,
+            {
+              backgroundColor:
+                colors.primarySofter,
+            },
+          ]}
+        >
+
+          <Ionicons
+            name={icon}
+            size={20}
+            color={
+              colors.primary
+            }
+          />
+
+        </View>
+
+
+        <View
+          style={
+            styles.settingsTextContainer
+          }
+        >
+
+          <Text
+            style={[
+              styles.settingsTitle,
+              {
+                color:
+                  colors.text,
+              },
+            ]}
+            numberOfLines={1}
+          >
+            {title}
+          </Text>
+
+
+          {subtitle && (
+
+            <Text
+              style={[
+                styles.settingsSubtitle,
+                {
+                  color:
+                    colors.textMuted,
+                },
+              ]}
+              numberOfLines={1}
+            >
+              {subtitle}
+            </Text>
+
+          )}
+
+        </View>
+
+      </View>
+
+
+      <View
+        style={
+          styles.settingsArrow
+        }
+      >
+
+        <Ionicons
+          name="chevron-forward"
+          size={19}
+          color={
+            colors.placeholder
+          }
+        />
+
+      </View>
+
+    </Pressable>
+
+  );
+}
+
+
+// ============================================================
+// SETTINGS DIVIDER
+// ============================================================
+
+function SettingsDivider({
+  colors,
+}) {
+
+  return (
+
+    <View
+      style={[
+        styles.settingsDivider,
+        {
+          backgroundColor:
+            colors.divider,
+        },
+      ]}
+    />
+
+  );
+}
+
+
+// ============================================================
+// FAQ ACCORDION
+// ============================================================
+
+function FaqAccordionItem({
+  question,
+  answer,
+  colors,
+}) {
+
+  const [expanded, setExpanded] =
+    useState(false);
+
+
+  return (
+
+    <View
+      style={[
+        styles.faqItem,
+        {
+          borderBottomColor:
+            colors.divider,
+        },
+      ]}
+    >
+
+      <Pressable
+        style={
+          styles.faqHeader
+        }
+        onPress={() => {
+
+          LayoutAnimation.configureNext(
+            LayoutAnimation.Presets.easeInEaseOut
+          );
+
+          setExpanded(
+            !expanded
+          );
+
+        }}
+      >
+
+        <Text
+          style={[
+            styles.faqQuestion,
+            {
+              color:
+                colors.text,
+            },
+          ]}
+        >
+          {question}
+        </Text>
+
+
+        <Ionicons
+          name={
+            expanded
+              ? 'chevron-up'
+              : 'chevron-down'
+          }
+          size={20}
+          color={
+            expanded
+              ? colors.primary
+              : colors.textMuted
+          }
+        />
+
+      </Pressable>
+
+
+      {expanded && (
+
+        <Text
+          style={[
+            styles.faqAnswer,
+            {
+              color:
+                colors.textSecondary,
+            },
+          ]}
+        >
+          {answer}
+        </Text>
+
+      )}
+
+    </View>
+
+  );
+}
+
+
+// ============================================================
+// FAQ DATA
+// ============================================================
 
 const FAQ_DATA = [
+
   {
-    question: "How do I create a new campaign?",
-    answer: "Go to your Home Dashboard and click the 'Generate with AI' or 'Manual Creation' tile to start creating a new campaign instantly."
+    question:
+      'How do I create a new campaign?',
+
+    answer:
+      "Go to your Home Dashboard and click the 'Generate with AI' or 'Manual Creation' tile to start creating a new campaign instantly.",
   },
+
   {
-    question: "Can I edit an active campaign?",
-    answer: "Yes, you can edit your active campaigns from the Campaigns tab by tapping the pencil icon on the campaign card."
+    question:
+      'Can I edit an active campaign?',
+
+    answer:
+      'Yes, you can edit your active campaigns from the Campaigns tab by tapping the pencil icon on the campaign card.',
   },
+
   {
-    question: "How do buyers contact me?",
-    answer: "Buyers can contact you via call or in-app chat. You will receive a push notification for new messages and leads."
+    question:
+      'How do buyers contact me?',
+
+    answer:
+      'Buyers can contact you via call or in-app chat. You will receive a push notification for new messages and leads.',
   },
+
   {
-    question: "How is billing handled?",
-    answer: "We offer transparent billing with our Pro and Elite plans. You can upgrade or manage your billing settings in the app."
-  }
+    question:
+      'How is billing handled?',
+
+    answer:
+      'We offer transparent billing with our Pro and Elite plans. You can upgrade or manage your billing settings in the app.',
+  },
+
 ];
 
-function FaqAccordionItem({ question, answer }) {
-  const [expanded, setExpanded] = useState(false);
-  
-  return (
-    <View style={styles.faqItem}>
-      <Pressable style={styles.faqHeader} onPress={() => {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        setExpanded(!expanded);
-      }}>
-        <Text style={styles.faqQuestion}>{question}</Text>
-        <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={20} color={expanded ? "#2563EB" : "#64748B"} />
-      </Pressable>
-      {expanded && (
-        <Text style={styles.faqAnswer}>{answer}</Text>
-      )}
-    </View>
-  );
-}
 
-function AnalyticsCard({ icon, color, value, label }) {
-  return (
-    <View style={styles.analyticsCard}>
-      <View style={[styles.analyticsIconWrapper, { backgroundColor: `${color}15` }]}>
-        <Ionicons name={icon} size={22} color={color} />
-      </View>
-      <Text style={styles.analyticsValue}>{value}</Text>
-      <Text style={styles.analyticsLabel}>{label}</Text>
-    </View>
-  );
-}
+// ============================================================
+// STYLES
+// ============================================================
 
-function EditableField({ label, value, onChangeText, editable = true, note, ...rest }) {
-  return (
-    <View style={styles.fieldGroup}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <View style={[styles.inputWrapper, !editable && styles.inputWrapperDisabled]}>
-        <TextInput
-          style={[styles.textInput, !editable && { color: COLORS.TEXT_SECONDARY }]}
-          value={value}
-          onChangeText={onChangeText}
-          editable={editable}
-          {...rest}
-        />
-      </View>
-      {note ? <Text style={styles.fieldNote}>{note}</Text> : null}
-    </View>
-  );
-}
-
-function SettingsRow({ icon, title, onPress, color = "#334155", hideArrow = false }) {
-  return (
-    <Pressable style={styles.settingsRow} onPress={onPress}>
-      <View style={styles.settingsRowLeft}>
-        <Ionicons name={icon} size={22} color={color} />
-        <Text style={[styles.settingsRowTitle, { color }]}>{title}</Text>
-      </View>
-      {!hideArrow && <Ionicons name="chevron-forward" size={20} color="#CBD5E1" />}
-    </Pressable>
-  );
-}
-
-// ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
-  loadingText: { color: COLORS.TEXT_SECONDARY, fontSize: FONT_SIZES.SM },
-  scrollContent: { paddingBottom: 40 },
 
-  // Header
-  header: {
-    backgroundColor: '#FFFFFF',
-    paddingTop: 16,
-    paddingBottom: 32,
-    paddingHorizontal: 24,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 4,
-    marginBottom: 24,
-  },
-  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-  headerTitle: { fontSize: 24, fontWeight: FONT_WEIGHTS.BOLD, color: '#0F172A' },
-  editBtn: { backgroundColor: '#F1F5F9', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
-  editBtnText: { color: COLORS.PRIMARY, fontSize: 13, fontWeight: FONT_WEIGHTS.SEMIBOLD },
-  
-  profileMeta: { alignItems: 'center', gap: 6 },
-  avatarContainer: { position: 'relative', marginBottom: 12 },
-  avatarCircle: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#DBEAFE' },
-  avatarText: { color: '#1A73E8', fontSize: 36, fontWeight: FONT_WEIGHTS.BOLD },
-  avatarEditIcon: { position: 'absolute', bottom: 0, right: 0, backgroundColor: COLORS.PRIMARY, width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFF' },
-  
-  profileName: { fontSize: 24, fontWeight: FONT_WEIGHTS.BOLD, color: '#0F172A' },
-  profileBusiness: { fontSize: 16, color: COLORS.TEXT_SECONDARY, marginBottom: 8, fontWeight: '500' },
-  verifiedBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0FDF4', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, marginBottom: 16, borderWidth: 1, borderColor: '#DCFCE7' },
-  verifiedText: { color: '#16A34A', fontSize: 13, fontWeight: FONT_WEIGHTS.SEMIBOLD, marginLeft: 6 },
-  
-  contactInfoWrapper: { width: '100%', backgroundColor: '#F8FAFC', borderRadius: 16, padding: 16, gap: 12 },
-  contactRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  contactText: { fontSize: 14, color: '#334155', flex: 1 },
+  // ----------------------------------------------------------
+  // SCREEN
+  // ----------------------------------------------------------
 
-  // Content
-  content: { paddingHorizontal: 20, gap: 24 },
-  sectionTitle: { fontSize: 18, fontWeight: FONT_WEIGHTS.BOLD, color: '#0F172A', marginBottom: 12, paddingLeft: 4 },
-  cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 12, paddingLeft: 4, paddingRight: 4 },
-  editText: { fontSize: FONT_SIZES.SM, fontWeight: FONT_WEIGHTS.SEMIBOLD, color: COLORS.PRIMARY, marginBottom: 0 },
-  
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 20,
-    gap: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-
-  // Analytics
-  analyticsGrid: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
-  analyticsCard: {
+  container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 16,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 2,
   },
-  analyticsIconWrapper: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
-  analyticsValue: { fontSize: 20, fontWeight: FONT_WEIGHTS.BOLD, color: '#0F172A', marginBottom: 4 },
-  analyticsLabel: { fontSize: 12, color: COLORS.TEXT_SECONDARY, textAlign: 'center', fontWeight: '500' },
 
-  // Fields
-  fieldGroup: { gap: 8 },
-  fieldLabel: { fontSize: 13, fontWeight: FONT_WEIGHTS.SEMIBOLD, color: '#475569' },
-  fieldNote: { fontSize: 11, color: COLORS.TEXT_SECONDARY, marginTop: -4 },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    height: 52,
+  scrollContent: {
+    paddingBottom: 120,
   },
-  inputWrapperDisabled: { backgroundColor: '#F8FAFC', borderColor: '#F1F5F9' },
-  textInput: { flex: 1, fontSize: 15, color: '#0F172A', height: '100%' },
-  passwordMask: { fontSize: 24, color: '#0F172A', letterSpacing: 3, marginTop: 6 },
-  changePasswordText: { fontSize: 13, fontWeight: FONT_WEIGHTS.BOLD, color: COLORS.PRIMARY },
-  
-  multilineCard: {
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-    padding: 16,
-    minHeight: 120,
-  },
-  multilineCardDisabled: { backgroundColor: '#F8FAFC', borderColor: '#F1F5F9' },
-  multilineInput: { flex: 1, fontSize: 15, color: '#0F172A', lineHeight: 22 },
-  multilineInputDisabled: { color: COLORS.TEXT_SECONDARY },
 
-  // Location
-  currentLocationDisplay: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0F9FF',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E0F2FE',
-  },
-  currentLocationText: { color: '#0369A1', fontSize: 15, fontWeight: '500', flex: 1, marginLeft: 12, lineHeight: 22 },
-  locationActions: { gap: 12, marginTop: 8 },
-  locationBtnRow: { flexDirection: 'row', gap: 12, marginTop: 4 },
-  outlineBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: COLORS.PRIMARY, borderRadius: 12, height: 48 },
-  outlineBtnText: { color: COLORS.PRIMARY, fontSize: 13, fontWeight: FONT_WEIGHTS.BOLD },
-
-  // Settings
-  settingsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
-  settingsRowLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  settingsRowTitle: { fontSize: 15, fontWeight: '500' },
-  settingsDivider: { height: 1, backgroundColor: '#F1F5F9', marginVertical: 8 },
-
-  // Bottom Action Bar
-  bottomBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#FFFFFF',
-    flexDirection: 'row',
-    padding: 20,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -8 },
-    shadowOpacity: 0.05,
-    shadowRadius: 16,
-    elevation: 20,
-    gap: 12,
-  },
-  cancelBtn: { flex: 1, height: 52, borderRadius: 14, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
-  cancelBtnText: { color: '#475569', fontSize: 15, fontWeight: FONT_WEIGHTS.BOLD },
-  saveBtnContainer: { flex: 2, height: 52, borderRadius: 14, overflow: 'hidden' },
-  saveBtnGradient: { flex: 1, justifyContent: 'center', alignItems: 'center', width: '100%' },
-  saveBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: FONT_WEIGHTS.BOLD },
-
-  // Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 32, gap: 20, shadowColor: '#000', shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.1, shadowRadius: 20 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  modalTitle: { fontSize: 22, fontWeight: FONT_WEIGHTS.BOLD, color: '#0F172A' },
-  modalSaveBtn: { height: 52, borderRadius: 14, overflow: 'hidden', marginTop: 12 },
-  
-  // FAQ
-  faqItem: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    paddingVertical: 16,
-  },
-  faqHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  faqQuestion: {
+  loadingContainer: {
     flex: 1,
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#0F172A',
-    paddingRight: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  faqAnswer: {
+
+  loadingText: {
     marginTop: 12,
     fontSize: 14,
-    color: '#475569',
-    lineHeight: 22,
   },
+
+
+  // ----------------------------------------------------------
+  // HEADER
+  // ----------------------------------------------------------
+
+  header: {
+
+    paddingTop: 14,
+
+    paddingHorizontal: 22,
+
+    paddingBottom: 24,
+
+    borderBottomWidth: 1,
+
+    borderBottomLeftRadius: 30,
+
+    borderBottomRightRadius: 30,
+
+    shadowColor: '#000',
+
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+
+    shadowOpacity: 0.05,
+
+    shadowRadius: 14,
+
+    elevation: 3,
+
+  },
+
+  headerTop: {
+
+    marginBottom: 18,
+
+  },
+
+  headerEyebrow: {
+
+    fontSize: 11,
+
+    fontWeight:
+      FONT_WEIGHTS.BOLD,
+
+    letterSpacing: 1.4,
+
+    marginBottom: 4,
+
+  },
+
+  headerTitle: {
+
+    fontSize: 25,
+
+    fontWeight:
+      FONT_WEIGHTS.BOLD,
+
+  },
+
+
+  // ----------------------------------------------------------
+  // HORIZONTAL PROFILE CARD
+  // ----------------------------------------------------------
+
+  profileSummaryCard: {
+
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    minHeight: 120,
+
+    paddingVertical: 20,
+
+    paddingHorizontal: 20,
+
+    borderRadius: 28,
+
+    borderWidth: 1,
+
+    shadowOffset: {
+      width: 0,
+      height: 6,
+    },
+
+    shadowOpacity: 0.10,
+
+    shadowRadius: 18,
+
+    elevation: 3,
+
+  },
+
+  avatarContainer: {
+    width: 88,
+    height: 88,
+    position: 'relative',
+    flexShrink: 0,
+  },
+  avatarCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2.5,
+  },
+
+  avatarText: {
+
+    fontSize: 30,
+
+    fontWeight:
+      FONT_WEIGHTS.BOLD,
+
+  },
+
+  avatarEditIcon: {
+
+    position: 'absolute',
+
+    right: -1,
+
+    bottom: -1,
+
+    width: 27,
+
+    height: 27,
+
+    borderRadius: 14,
+
+    justifyContent: 'center',
+
+    alignItems: 'center',
+
+    borderWidth: 2,
+
+  },
+
+  profileTextContainer: {
+    flex: 1,
+    marginLeft: 18,
+    minWidth: 0,
+    justifyContent: 'center',
+    gap: 3,
+  },
+
+  profileName: {
+    fontSize: 22,
+    fontWeight: FONT_WEIGHTS.BOLD,
+    marginBottom: 2,
+    flexShrink: 1,
+  },
+
+  profileBusiness: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '500',
+    marginBottom: 6,
+    flexShrink: 1,
+  },
+
+  verifiedBadge: {
+
+    alignSelf: 'flex-start',
+
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    paddingHorizontal: 9,
+
+    paddingVertical: 5,
+
+    borderRadius: 11,
+
+    borderWidth: 1,
+
+  },
+
+  verifiedText: {
+
+    fontSize: 11,
+
+    fontWeight:
+      FONT_WEIGHTS.BOLD,
+
+    marginLeft: 4,
+
+  },
+
+
+  // ----------------------------------------------------------
+  // CONTENT
+  // ----------------------------------------------------------
+
+  content: {
+
+    paddingHorizontal: 18,
+
+    paddingTop: 22,
+
+  },
+
+
+  // ----------------------------------------------------------
+  // SECTION HEADER
+  // ----------------------------------------------------------
+
+  sectionHeader: {
+
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    justifyContent:
+      'space-between',
+
+    marginBottom: 11,
+
+    marginTop: 5,
+
+  },
+
+  sectionTitle: {
+
+    fontSize: 18,
+
+    fontWeight:
+      FONT_WEIGHTS.BOLD,
+
+  },
+
+  sectionSubtitle: {
+
+    fontSize: 12,
+
+    marginTop: 3,
+
+  },
+
+  editPill: {
+
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    paddingHorizontal: 11,
+
+    paddingVertical: 7,
+
+    borderRadius: 12,
+
+    gap: 5,
+
+  },
+
+  editPillText: {
+
+    fontSize: 12,
+
+    fontWeight:
+      FONT_WEIGHTS.BOLD,
+
+  },
+
+
+  // ----------------------------------------------------------
+  // ANALYTICS
+  // ----------------------------------------------------------
+
+  analyticsGrid: {
+
+    flexDirection: 'row',
+
+    gap: 10,
+
+    marginBottom: 25,
+
+  },
+
+  analyticsCard: {
+
+    flex: 1,
+
+    minHeight: 116,
+
+    borderRadius: 19,
+
+    borderWidth: 1,
+
+    paddingVertical: 14,
+
+    paddingHorizontal: 8,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+  },
+
+  analyticsIcon: {
+
+    width: 40,
+
+    height: 40,
+
+    borderRadius: 12,
+
+    justifyContent: 'center',
+
+    alignItems: 'center',
+
+    marginBottom: 7,
+
+  },
+
+  analyticsValue: {
+
+    fontSize: 21,
+
+    fontWeight:
+      FONT_WEIGHTS.BOLD,
+
+  },
+
+  analyticsLabel: {
+
+    fontSize: 11.5,
+
+    fontWeight: '600',
+
+    marginTop: 2,
+
+    textAlign: 'center',
+
+  },
+
+
+  // ----------------------------------------------------------
+  // CARDS
+  // ----------------------------------------------------------
+
+  card: {
+
+    borderRadius: 22,
+
+    borderWidth: 1,
+
+    padding: 16,
+
+    marginBottom: 24,
+
+    gap: 17,
+
+  },
+
+
+  // ----------------------------------------------------------
+  // FIELDS
+  // ----------------------------------------------------------
+
+  fieldGroup: {
+
+    gap: 7,
+
+  },
+
+  fieldLabel: {
+
+    fontSize: 12.5,
+
+    fontWeight:
+      FONT_WEIGHTS.SEMIBOLD,
+
+  },
+
+  fieldNote: {
+
+    fontSize: 10.5,
+
+    lineHeight: 15,
+
+    marginTop: 1,
+
+  },
+
+  inputWrapper: {
+
+    minHeight: 52,
+
+    borderRadius: 14,
+
+    borderWidth: 1.2,
+
+    paddingHorizontal: 14,
+
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+  },
+
+  textInput: {
+
+    flex: 1,
+
+    height: '100%',
+
+    fontSize: 15,
+
+    fontWeight: '500',
+
+  },
+
+  passwordMask: {
+
+    fontSize: 21,
+
+    letterSpacing: 3,
+
+  },
+
+  changePasswordButton: {
+
+    paddingVertical: 7,
+
+    paddingLeft: 12,
+
+  },
+
+  changePasswordText: {
+
+    fontSize: 13,
+
+    fontWeight:
+      FONT_WEIGHTS.BOLD,
+
+  },
+
+  multilineWrapper: {
+
+    minHeight: 118,
+
+    borderRadius: 15,
+
+    borderWidth: 1.2,
+
+    paddingHorizontal: 14,
+
+    paddingVertical: 12,
+
+  },
+
+  multilineInput: {
+
+    flex: 1,
+
+    minHeight: 90,
+
+    fontSize: 14.5,
+
+    lineHeight: 21,
+
+  },
+
+
+  // ----------------------------------------------------------
+  // LOCATION
+  // ----------------------------------------------------------
+
+  locationDisplay: {
+
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    borderRadius: 16,
+
+    borderWidth: 1,
+
+    padding: 13,
+
+  },
+
+  locationIcon: {
+
+    width: 40,
+
+    height: 40,
+
+    borderRadius: 12,
+
+    justifyContent: 'center',
+
+    alignItems: 'center',
+
+    marginRight: 11,
+
+  },
+
+  locationText: {
+
+    flex: 1,
+
+    fontSize: 13.5,
+
+    lineHeight: 20,
+
+    fontWeight: '500',
+
+  },
+
+  locationActions: {
+
+    marginTop: 14,
+
+  },
+
+  locationButtonRow: {
+
+    flexDirection: 'row',
+
+    gap: 10,
+
+  },
+
+  outlineButton: {
+
+    flex: 1,
+
+    height: 46,
+
+    borderRadius: 13,
+
+    borderWidth: 1.2,
+
+    justifyContent: 'center',
+
+    alignItems: 'center',
+
+    flexDirection: 'row',
+
+    gap: 6,
+
+  },
+
+  outlineButtonText: {
+
+    fontSize: 12.5,
+
+    fontWeight:
+      FONT_WEIGHTS.BOLD,
+
+  },
+
+
+  // ----------------------------------------------------------
+  // ACCOUNT SETTINGS
+  // ----------------------------------------------------------
+
+  accountSettingsSection: {
+    marginTop: 8,
+    marginHorizontal: 18,
+  },
+
+  accountSectionHeader: {
+
+    marginBottom: 12,
+
+    paddingHorizontal: 4,
+
+  },
+
+  accountSectionTitle: {
+
+    fontSize: 13,
+
+    fontWeight:
+      FONT_WEIGHTS.BOLD,
+
+    letterSpacing: 1.2,
+
+  },
+
+  accountSectionSubtitle: {
+
+    fontSize: 11.5,
+
+    marginTop: 4,
+
+  },
+
+  settingsCard: {
+
+    borderRadius: 26,
+
+    borderWidth: 1,
+
+    paddingVertical: 4,
+
+    paddingHorizontal: 6,
+
+    overflow: 'hidden',
+
+    shadowOffset: {
+      width: 0,
+      height: 6,
+    },
+
+    shadowOpacity: 0.08,
+
+    shadowRadius: 18,
+
+    elevation: 3,
+
+  },
+
+  settingsRow: {
+
+    minHeight: 68,
+
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    justifyContent:
+      'space-between',
+
+    paddingHorizontal: 8,
+
+    paddingVertical: 10,
+
+  },
+
+  settingsRowLeft: {
+
+    flex: 1,
+
+    minWidth: 0,
+
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+  },
+
+  settingsIcon: {
+
+    width: 42,
+
+    height: 42,
+
+    borderRadius: 13,
+
+    justifyContent: 'center',
+
+    alignItems: 'center',
+
+    flexShrink: 0,
+
+  },
+
+  settingsTextContainer: {
+
+    flex: 1,
+
+    marginLeft: 12,
+
+    minWidth: 0,
+
+  },
+
+  settingsTitle: {
+
+    fontSize: 15,
+
+    fontWeight:
+      FONT_WEIGHTS.SEMIBOLD,
+
+  },
+
+  settingsSubtitle: {
+
+    fontSize: 12,
+
+    marginTop: 2,
+
+  },
+
+  settingsArrow: {
+
+    width: 26,
+
+    alignItems: 'flex-end',
+
+    justifyContent: 'center',
+
+  },
+
+  settingsDivider: {
+
+    height: 1,
+
+    marginHorizontal: 8,
+
+  },
+
+
+  // ----------------------------------------------------------
+  // DANGER
+  // ----------------------------------------------------------
+
+  destructiveActions: {
+
+    marginTop: 20,
+
+    gap: 10,
+
+  },
+
+  destructiveButton: {
+
+    minHeight: 56,
+
+    borderRadius: 16,
+
+    borderWidth: 1,
+
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    paddingHorizontal: 14,
+
+  },
+
+  destructiveIcon: {
+
+    width: 36,
+
+    height: 36,
+
+    borderRadius: 11,
+
+    justifyContent: 'center',
+
+    alignItems: 'center',
+
+  },
+
+  destructiveText: {
+
+    fontSize: 14,
+
+    fontWeight:
+      FONT_WEIGHTS.BOLD,
+
+    marginLeft: 11,
+
+  },
+
+
+  // ----------------------------------------------------------
+  // BOTTOM SAVE BAR
+  // ----------------------------------------------------------
+
+  bottomBar: {
+
+    position: 'absolute',
+
+    left: 0,
+
+    right: 0,
+
+    bottom: 0,
+
+    minHeight: 82,
+
+    paddingHorizontal: 16,
+
+    paddingTop: 12,
+
+    paddingBottom:
+      Platform.OS === 'ios'
+        ? 30
+        : 12,
+
+    borderTopWidth: 1,
+
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    gap: 10,
+
+    shadowColor: '#000',
+
+    shadowOffset: {
+      width: 0,
+      height: -6,
+    },
+
+    shadowOpacity: 0.12,
+
+    shadowRadius: 15,
+
+    elevation: 20,
+
+  },
+
+  cancelButton: {
+
+    flex: 1,
+
+    height: 50,
+
+    borderRadius: 14,
+
+    borderWidth: 1,
+
+    justifyContent: 'center',
+
+    alignItems: 'center',
+
+  },
+
+  cancelButtonText: {
+
+    fontSize: 14,
+
+    fontWeight:
+      FONT_WEIGHTS.BOLD,
+
+  },
+
+  saveButton: {
+
+    flex: 2,
+
+    height: 50,
+
+    borderRadius: 14,
+
+    overflow: 'hidden',
+
+  },
+
+  saveGradient: {
+
+    flex: 1,
+
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    gap: 7,
+
+  },
+
+  saveButtonText: {
+
+    color: '#FFFFFF',
+
+    fontSize: 14,
+
+    fontWeight:
+      FONT_WEIGHTS.BOLD,
+
+  },
+
+
+  // ----------------------------------------------------------
+  // MODALS
+  // ----------------------------------------------------------
+
+  modalOverlay: {
+
+    flex: 1,
+
+    justifyContent: 'flex-end',
+
+  },
+
+  modalContent: {
+
+    borderTopLeftRadius: 30,
+
+    borderTopRightRadius: 30,
+
+    borderWidth: 1,
+
+    paddingHorizontal: 20,
+
+    paddingTop: 10,
+
+    paddingBottom:
+      Platform.OS === 'ios'
+        ? 34
+        : 22,
+
+  },
+
+  faqModalContent: {
+
+    maxHeight: '82%',
+
+    borderTopLeftRadius: 30,
+
+    borderTopRightRadius: 30,
+
+    borderWidth: 1,
+
+    paddingHorizontal: 20,
+
+    paddingTop: 10,
+
+    paddingBottom:
+      Platform.OS === 'ios'
+        ? 30
+        : 20,
+
+  },
+
+  modalHandle: {
+
+    alignSelf: 'center',
+
+    width: 42,
+
+    height: 4,
+
+    borderRadius: 5,
+
+    backgroundColor: '#A0A8B8',
+
+    marginBottom: 17,
+
+  },
+
+  modalHeader: {
+
+    flexDirection: 'row',
+
+    justifyContent:
+      'space-between',
+
+    alignItems: 'center',
+
+    marginBottom: 18,
+
+  },
+
+  modalTitle: {
+
+    fontSize: 21,
+
+    fontWeight:
+      FONT_WEIGHTS.BOLD,
+
+  },
+
+  modalSubtitle: {
+
+    fontSize: 12,
+
+    marginTop: 4,
+
+  },
+
+  modalClose: {
+
+    width: 38,
+
+    height: 38,
+
+    borderRadius: 12,
+
+    justifyContent: 'center',
+
+    alignItems: 'center',
+
+  },
+
+
+  // ----------------------------------------------------------
+  // RETENTION
+  // ----------------------------------------------------------
+
+  retentionOption: {
+
+    minHeight: 64,
+
+    borderRadius: 15,
+
+    borderWidth: 1,
+
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    paddingHorizontal: 12,
+
+    marginBottom: 10,
+
+  },
+
+  retentionIcon: {
+
+    width: 38,
+
+    height: 38,
+
+    borderRadius: 11,
+
+    justifyContent: 'center',
+
+    alignItems: 'center',
+
+  },
+
+  retentionText: {
+
+    flex: 1,
+
+    marginLeft: 11,
+
+  },
+
+  retentionTitle: {
+
+    fontSize: 14,
+
+    fontWeight:
+      FONT_WEIGHTS.SEMIBOLD,
+
+  },
+
+  retentionSubtitle: {
+
+    fontSize: 10.5,
+
+    marginTop: 2,
+
+  },
+
+
+  // ----------------------------------------------------------
+  // FAQ
+  // ----------------------------------------------------------
+
+  faqItem: {
+
+    borderBottomWidth: 1,
+
+    paddingVertical: 16,
+
+  },
+
+  faqHeader: {
+
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    justifyContent:
+      'space-between',
+
+  },
+
+  faqQuestion: {
+
+    flex: 1,
+
+    paddingRight: 15,
+
+    fontSize: 14.5,
+
+    lineHeight: 20,
+
+    fontWeight:
+      FONT_WEIGHTS.SEMIBOLD,
+
+  },
+
+  faqAnswer: {
+
+    marginTop: 10,
+
+    fontSize: 13.5,
+
+    lineHeight: 21,
+
+  },
+
 });
