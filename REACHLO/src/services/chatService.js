@@ -5,6 +5,26 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const CHAT_RETENTION_KEY = 'reachlo_chat_retention';
 const CHAT_CACHE_KEY_PREFIX = 'reachlo_chat_';
 
+// ---------------------------------------------------------------------------
+// Keep-alive: ping the backend every 10 minutes so Render's free-tier server
+// does NOT spin down (which causes the infamous 50-second cold-start delay).
+// ---------------------------------------------------------------------------
+let _keepAliveTimer = null;
+
+function _startKeepAlive() {
+  if (_keepAliveTimer) return; // already running
+  _keepAliveTimer = setInterval(async () => {
+    try {
+      await fetch(`${API_CONFIG.MEDIA_BASE_URL}/api/health`, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      });
+    } catch (_) {
+      // Ignore — this is best-effort only
+    }
+  }, 10 * 60 * 1000); // every 10 minutes
+}
+
 class ChatService {
   constructor() {
     this.ws = null;
@@ -12,6 +32,8 @@ class ChatService {
     this.localListeners = [];
     this.isConnected = false;
     this.reconnectTimeout = null;
+    // Start keep-alive as soon as service is instantiated
+    _startKeepAlive();
     this.connectWs();
   }
 
@@ -54,18 +76,17 @@ class ChatService {
       const data = await AsyncStorage.getItem(`${CHAT_CACHE_KEY_PREFIX}${threadId}`);
       if (!data) return [];
       const parsed = JSON.parse(data);
-      
+
       const policy = await this.getRetentionPolicy();
       if (policy === 'forever') return parsed;
-      
+
       const now = new Date().getTime();
       let limitMs = 0;
       if (policy === '24h') limitMs = 24 * 60 * 60 * 1000;
       else if (policy === '1w') limitMs = 7 * 24 * 60 * 60 * 1000;
       else if (policy === '1m') limitMs = 30 * 24 * 60 * 60 * 1000;
-      
-      const filtered = parsed.filter(m => (now - new Date(m.created_at).getTime()) < limitMs);
-      return filtered;
+
+      return parsed.filter(m => (now - new Date(m.created_at).getTime()) < limitMs);
     } catch (e) {
       return [];
     }
@@ -81,7 +102,7 @@ class ChatService {
 
   async connectWs() {
     if (this.ws || this.isConnected) return;
-    
+
     try {
       const token = await AsyncStorage.getItem('reachlo_token');
       if (!token) return;
@@ -107,7 +128,7 @@ class ChatService {
         console.log('[ChatService] WS Disconnected');
         this.isConnected = false;
         this.ws = null;
-        // Auto-reconnect
+        // Auto-reconnect after 3s
         this.reconnectTimeout = setTimeout(() => this.connectWs(), 3000);
       };
 
@@ -168,28 +189,37 @@ class ChatService {
   }
 
   /**
-   * Get messages for a thread (merges cache with backend).
+   * Get messages for a thread.
+   *
+   * PERFORMANCE: Returns cached messages IMMEDIATELY via onCacheHit callback
+   * so the UI renders instantly, then fetches fresh data from the server
+   * in parallel and returns it. This eliminates the perceived loading delay.
    */
-  async getMessages(threadId) {
+  async getMessages(threadId, onCacheHit) {
+    // 1. Return cached messages immediately so UI shows something at once
     const cached = await this._getStoredMessages(threadId);
-    
+    if (cached.length > 0 && typeof onCacheHit === 'function') {
+      onCacheHit(cached);
+    }
+
+    // 2. Fetch fresh data from server
     try {
       const serverMsgs = await apiService.get(`/chat/threads/${threadId}/messages`);
       await this._storeMessages(threadId, serverMsgs);
-      
+
       const policy = await this.getRetentionPolicy();
       if (policy === 'forever') return serverMsgs;
-      
+
       const now = new Date().getTime();
       let limitMs = 0;
       if (policy === '24h') limitMs = 24 * 60 * 60 * 1000;
       else if (policy === '1w') limitMs = 7 * 24 * 60 * 60 * 1000;
       else if (policy === '1m') limitMs = 30 * 24 * 60 * 60 * 1000;
-      
+
       return serverMsgs.filter(m => (now - new Date(m.created_at).getTime()) < limitMs);
     } catch (e) {
       console.log('Failed to fetch messages, using cache');
-      return cached; // fallback to cache
+      return cached; // fallback to cache on network error
     }
   }
 

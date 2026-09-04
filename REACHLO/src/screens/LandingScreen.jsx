@@ -1,5 +1,7 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
+  Animated,
+  Easing,
   View,
   Text,
   StyleSheet,
@@ -11,55 +13,60 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withTiming,
-  withSequence,
-  withDelay,
-  Easing,
-  withSpring,
-} from 'react-native-reanimated';
 import COLORS from '../constants/colors';
+import { useTheme } from '../context/ThemeContext';
 import { FONT_SIZES, FONT_WEIGHTS, LINE_HEIGHTS } from '../constants/typography';
 
 const { width, height } = Dimensions.get('window');
 
 // A soft floating particle component
 const FloatingParticle = ({ size, color, startX, startY, delay }) => {
-  const translateY = useSharedValue(0);
-  const opacity = useSharedValue(0.3);
+  const translateY = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
-    translateY.value = withDelay(
-      delay,
-      withRepeat(
-        withSequence(
-          withTiming(-20, { duration: 3000, easing: Easing.inOut(Easing.ease) }),
-          withTiming(0, { duration: 3000, easing: Easing.inOut(Easing.ease) })
-        ),
-        -1,
-        true
-      )
+    const translateLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(translateY, {
+          toValue: -20,
+          duration: 3000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateY, {
+          toValue: 0,
+          duration: 3000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
     );
-    opacity.value = withDelay(
-      delay,
-      withRepeat(
-        withSequence(
-          withTiming(0.8, { duration: 2000 }),
-          withTiming(0.3, { duration: 2000 })
-        ),
-        -1,
-        true
-      )
+    const opacityLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue: 0.8,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0.3,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+      ])
     );
-  }, []);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-    opacity: opacity.value,
-  }));
+    const timer = setTimeout(() => {
+      translateLoop.start();
+      opacityLoop.start();
+    }, delay);
+
+    return () => {
+      clearTimeout(timer);
+      translateLoop.stop();
+      opacityLoop.stop();
+    };
+  }, [delay, opacity, translateY]);
 
   return (
     <Animated.View
@@ -73,7 +80,10 @@ const FloatingParticle = ({ size, color, startX, startY, delay }) => {
           left: startX,
           top: startY,
         },
-        animatedStyle,
+        {
+          transform: [{ translateY }],
+          opacity,
+        },
       ]}
     />
   );
@@ -81,6 +91,7 @@ const FloatingParticle = ({ size, color, startX, startY, delay }) => {
 
 
 export default function LandingScreen({ navigation }) {
+  const { theme, isDarkMode } = useTheme();
   const navigateToRegister = (role) => {
     navigation.navigate('Register', { defaultRole: role });
   };
@@ -90,24 +101,21 @@ export default function LandingScreen({ navigation }) {
   };
 
   // Hover/Press animations for cards
-  const businessScale = useSharedValue(1);
-  const buyerScale = useSharedValue(1);
-  const arrowTranslateX = useSharedValue(0);
+  const businessScale = useRef(new Animated.Value(1)).current;
+  const buyerScale = useRef(new Animated.Value(1)).current;
+  const arrowTranslateX = useRef(new Animated.Value(0)).current;
 
-  const businessAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: businessScale.value }],
-  }));
-
-  const buyerAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: buyerScale.value }],
-  }));
-
-  const arrowAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: arrowTranslateX.value }],
-  }));
+  const springValue = (value, toValue) => {
+    Animated.spring(value, {
+      toValue,
+      useNativeDriver: true,
+      friction: 7,
+      tension: 80,
+    }).start();
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       {/* BACKGROUND BLOBS */}
       <View style={styles.backgroundContainer}>
         <LinearGradient
@@ -128,7 +136,7 @@ export default function LandingScreen({ navigation }) {
         showsVerticalScrollIndicator={false}
       >
         {/* HEADER */}
-        <View style={styles.header}>
+        <View style={[styles.header, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
           <BlurView intensity={30} tint="light" style={styles.logoContainer}>
             <Text style={styles.headerLogo}>R</Text>
           </BlurView>
@@ -149,16 +157,16 @@ export default function LandingScreen({ navigation }) {
           {/* BUSINESS CARD */}
           <Pressable
             onPressIn={() => {
-              businessScale.value = withSpring(0.96);
-              arrowTranslateX.value = withSpring(10);
+              springValue(businessScale, 0.96);
+              springValue(arrowTranslateX, 10);
             }}
             onPressOut={() => {
-              businessScale.value = withSpring(1);
-              arrowTranslateX.value = withSpring(0);
+              springValue(businessScale, 1);
+              springValue(arrowTranslateX, 0);
             }}
             onPress={() => navigateToRegister('SELLER')}
           >
-            <Animated.View style={[styles.businessCardWrapper, businessAnimatedStyle]}>
+            <Animated.View style={[styles.businessCardWrapper, { transform: [{ scale: businessScale }] }]}>
               <LinearGradient
                 colors={['#0EA5E9', '#2563EB']}
                 style={styles.businessGradient}
@@ -169,7 +177,7 @@ export default function LandingScreen({ navigation }) {
                       <Text style={styles.cardTitleWhite}>For Business</Text>
                       <Text style={styles.cardSubtitleWhite}>Post offers & get leads</Text>
                     </View>
-                    <Animated.Text style={[styles.arrowIcon, arrowAnimatedStyle]}>
+                    <Animated.Text style={[styles.arrowIcon, { transform: [{ translateX: arrowTranslateX }] }]}>
                       ➔
                     </Animated.Text>
                   </View>
@@ -184,11 +192,11 @@ export default function LandingScreen({ navigation }) {
 
           {/* BUYER CARD */}
           <Pressable
-            onPressIn={() => buyerScale.value = withSpring(0.96)}
-            onPressOut={() => buyerScale.value = withSpring(1)}
+            onPressIn={() => springValue(buyerScale, 0.96)}
+            onPressOut={() => springValue(buyerScale, 1)}
             onPress={() => navigateToRegister('BUYER')}
           >
-            <Animated.View style={[styles.buyerCardWrapper, buyerAnimatedStyle]}>
+            <Animated.View style={[styles.buyerCardWrapper, { transform: [{ scale: buyerScale }] }]}>
               <BlurView intensity={40} tint="light" style={styles.buyerGlass}>
                 <View style={styles.cardContent}>
                   <View>

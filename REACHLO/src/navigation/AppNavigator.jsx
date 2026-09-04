@@ -14,6 +14,7 @@ import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 import SellerProfileScreen from '../screens/placeholders/SellerProfileScreen';
 import SellerEditProfileScreen from '../screens/placeholders/SellerEditProfileScreen';
 import SellerEditBusinessScreen from '../screens/placeholders/SellerEditBusinessScreen';
+import SellerChangePasswordScreen from '../screens/placeholders/SellerChangePasswordScreen';
 import AICampaignGenerateScreen from '../screens/placeholders/AICampaignGenerateScreen';
 import AIDraftReviewScreen from '../screens/placeholders/AIDraftReviewScreen';
 import ChatScreen from '../screens/placeholders/ChatScreen';
@@ -23,6 +24,9 @@ import AllCategoriesScreen from '../screens/placeholders/AllCategoriesScreen';
 import AboutScreen from '../screens/AboutScreen';
 import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen';
 import HelpSupportScreen from '../screens/HelpSupportScreen';
+import SellerAnalyticsScreen from '../screens/SellerAnalyticsScreen';
+import SellerWalletScreen from '../screens/SellerWalletScreen';
+import SellerSettingsScreen from '../screens/SellerSettingsScreen';
 
 const Stack = createStackNavigator();
 
@@ -115,6 +119,26 @@ export default function AppNavigator() {
       <Stack.Screen
         name="SellerEditBusiness"
         component={SellerEditBusinessScreen}
+        options={{ cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS }}
+      />
+      <Stack.Screen
+        name="SellerChangePasswordScreen"
+        component={SellerChangePasswordScreen}
+        options={{ cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS }}
+      />
+      <Stack.Screen
+        name="SellerSettings"
+        component={SellerSettingsScreen}
+        options={{ cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS }}
+      />
+      <Stack.Screen
+        name="SellerAnalytics"
+        component={SellerAnalyticsScreen}
+        options={{ cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS }}
+      />
+      <Stack.Screen
+        name="SellerWallet"
+        component={SellerWalletScreen}
         options={{ cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS }}
       />
 

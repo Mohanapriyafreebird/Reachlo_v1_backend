@@ -222,10 +222,16 @@ def register(user_in: UserRegister, db: Session = Depends(get_db)):
 @router.post("/login", response_model=Token)
 def login(login_in: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == login_in.email.lower()).first()
-    if not user or not verify_password(login_in.password, user.password_hash):
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password."
+            detail="Email not found."
+        )
+    
+    if not verify_password(login_in.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect password."
         )
     
     if not user.is_active:

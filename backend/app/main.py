@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
 from app.migrations import run_migrations
-from app.routers import auth, campaigns, leads, businesses, upload, chat, feedback
+from app.routers import auth, campaigns, leads, businesses, upload, chat, feedback, analytics, wallet
 from app.routers import ai
 
 # Create database tables automatically
@@ -44,6 +44,8 @@ app.include_router(upload.router, prefix="/api")
 app.include_router(ai.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
 app.include_router(feedback.router, prefix="/api")
+app.include_router(analytics.router, prefix="/api")
+app.include_router(wallet.router, prefix="/api")
 
 @app.get("/")
 def read_root():

@@ -20,7 +20,10 @@ import { FONT_SIZES, FONT_WEIGHTS } from '../constants/typography';
 import apiService from '../services/apiService';
 import Toast from './Toast';
 
+import { useRoleTheme } from '../context/ThemeContext';
+
 export default function RatingModal({ visible, onClose, userRole = 'buyer', onSuccess }) {
+  const { theme } = useRoleTheme(userRole);
   const [rating, setRating] = useState(0);
   const [feedbackText, setFeedbackText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -89,12 +92,12 @@ export default function RatingModal({ visible, onClose, userRole = 'buyer', onSu
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.keyboardView}
           >
-            <View style={styles.modalContent}>
+            <View style={[styles.modalContent, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
               
               {/* Close Button */}
               {!submitted && (
                 <Pressable style={styles.closeButton} onPress={resetAndClose}>
-                  <Ionicons name="close" size={24} color="#94A3B8" />
+                  <Ionicons name="close" size={24} color={theme.textTertiary} />
                 </Pressable>
               )}
 
@@ -103,12 +106,12 @@ export default function RatingModal({ visible, onClose, userRole = 'buyer', onSu
                   <View style={styles.successIconCircle}>
                     <Ionicons name="checkmark" size={32} color="#10B981" />
                   </View>
-                  <Text style={styles.successTitle}>Thank You!</Text>
-                  <Text style={styles.successText}>Your feedback helps us make REACHLO better for everyone.</Text>
+                  <Text style={[styles.successTitle, { color: theme.text }]}>Thank You!</Text>
+                  <Text style={[styles.successText, { color: theme.textSecondary }]}>Your feedback helps us make REACHLO better for everyone.</Text>
                 </View>
               ) : (
                 <>
-                  <Text style={styles.title}>Rate REACHLO</Text>
+                  <Text style={[styles.title, { color: theme.text }]}>Rate REACHLO</Text>
                   
                   {/* Stars Container */}
                   <View style={styles.starsContainer}>
@@ -129,11 +132,11 @@ export default function RatingModal({ visible, onClose, userRole = 'buyer', onSu
 
                   {rating > 0 && (
                     <Animated.View style={styles.feedbackContainer}>
-                      <Text style={styles.promptText}>{getPromptText()}</Text>
+                      <Text style={[styles.promptText, { color: theme.textSecondary }]}>{getPromptText()}</Text>
                       <TextInput
-                        style={styles.textInput}
+                        style={[styles.textInput, { backgroundColor: theme.surface, borderColor: theme.border, color: theme.text }]}
                         placeholder="Tell us more (optional)..."
-                        placeholderTextColor="#94A3B8"
+                        placeholderTextColor={theme.textTertiary}
                         multiline
                         numberOfLines={4}
                         value={feedbackText}

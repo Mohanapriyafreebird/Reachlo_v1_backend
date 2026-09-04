@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+
 import {
   View,
   Text,
@@ -10,95 +11,366 @@ import {
   Keyboard,
   Pressable,
   Animated,
+  TextInput,
+  ActivityIndicator,
+  StatusBar,
 } from 'react-native';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
-import COLORS from '../constants/colors';
-import { FONT_SIZES, FONT_WEIGHTS } from '../constants/typography';
-import InputField from '../components/InputField';
-import PasswordInput from '../components/PasswordInput';
-import PrimaryButton from '../components/PrimaryButton';
-import Toast from '../components/Toast';
+import { Ionicons } from '@expo/vector-icons';
+
+import { useTheme } from '../context/ThemeContext';
 import apiService from '../services/apiService';
 
+
+/* =========================================================
+   FORGOT PASSWORD SCREEN
+   ========================================================= */
+
 export default function ForgotPasswordScreen({ navigation }) {
-  const [step, setStep] = useState(1); // 1=enter email, 2=enter new password, 3=success
+
+  const { isDarkMode } = useTheme();
+
+  const [step, setStep] = useState(1);
+  // 1 = verify email
+  // 2 = create new password
+  // 3 = success
+
   const [email, setEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
-  const [toastVisible, setToastVisible] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
-  const [toastType, setToastType] = useState('info');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const successScaleAnim = useRef(new Animated.Value(0)).current;
+  const successScaleAnim = useRef(
+    new Animated.Value(0.7)
+  ).current;
 
-  const showToastMsg = (message, type = 'info') => {
-    setToastMessage(message);
-    setToastType(type);
-    setToastVisible(true);
+
+  /* =========================================================
+     THEME
+     ========================================================= */
+
+  const colors = isDarkMode
+    ? {
+        background: '#070D19',
+
+        headerTop: '#111C31',
+        headerBottom: '#0B1526',
+
+        surface: '#111C31',
+        surfaceElevated: '#16233B',
+
+        input: '#0D182B',
+        inputFocused: '#11213A',
+
+        border: '#263750',
+        borderStrong: '#365070',
+
+        text: '#F8FAFC',
+        textSecondary: '#AEBACB',
+        textMuted: '#718198',
+
+        primary: '#4F8CFF',
+        primaryDark: '#2563EB',
+
+        primarySoft: 'rgba(79,140,255,0.15)',
+        primarySoftStrong: 'rgba(79,140,255,0.23)',
+
+        success: '#34D399',
+        successSoft: 'rgba(52,211,153,0.14)',
+
+        error: '#FB7185',
+        errorSoft: 'rgba(251,113,133,0.12)',
+
+        white: '#FFFFFF',
+      }
+    : {
+        background: '#F5F8FC',
+
+        headerTop: '#2563EB',
+        headerBottom: '#347EF0',
+
+        surface: '#FFFFFF',
+        surfaceElevated: '#FFFFFF',
+
+        input: '#F8FAFD',
+        inputFocused: '#FFFFFF',
+
+        border: '#E1E8F2',
+        borderStrong: '#CBD8EA',
+
+        text: '#0F172A',
+        textSecondary: '#64748B',
+        textMuted: '#94A3B8',
+
+        primary: '#2563EB',
+        primaryDark: '#1D4ED8',
+
+        primarySoft: '#EAF2FF',
+        primarySoftStrong: '#DCEAFF',
+
+        success: '#10B981',
+        successSoft: '#E9FAF3',
+
+        error: '#E11D48',
+        errorSoft: '#FFF1F2',
+
+        white: '#FFFFFF',
+      };
+
+
+  /* =========================================================
+     TOAST
+     ========================================================= */
+
+  const [toast, setToast] = useState({
+    visible: false,
+    message: '',
+    type: 'info',
+  });
+
+  const showToast = (message, type = 'info') => {
+    setToast({
+      visible: true,
+      message,
+      type,
+    });
+
+    setTimeout(() => {
+      setToast(prev => ({
+        ...prev,
+        visible: false,
+      }));
+    }, 3000);
   };
 
-  const handleCheckEmail = async () => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  /* =========================================================
+     EMAIL VALIDATION
+     ========================================================= */
+
+  const validateEmail = () => {
+
+    const emailRegex =
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
     if (!email.trim()) {
-      setErrors({ email: 'Email address is required' });
-      return;
+      setErrors({
+        email: 'Email address is required',
+      });
+
+      return false;
     }
+
     if (!emailRegex.test(email.trim())) {
-      setErrors({ email: 'Please enter a valid email address' });
+      setErrors({
+        email: 'Please enter a valid email address',
+      });
+
+      return false;
+    }
+
+    return true;
+  };
+
+
+  /* =========================================================
+     CHECK EMAIL
+     ========================================================= */
+
+  const handleCheckEmail = async () => {
+
+    if (!validateEmail()) {
       return;
     }
+
+    Keyboard.dismiss();
+
     setErrors({});
     setLoading(true);
 
     try {
-      // Verify the email exists in the database before going to step 2
+
+      /*
+       * Keep the existing backend verification behaviour.
+       * The backend will reject the temporary password
+       * after confirming whether the account exists.
+       */
+
       await apiService.post('/auth/reset-password', {
         email: email.trim().toLowerCase(),
-        new_password: '__verify_only__check_email__',  // temporary probe — backend rejects this (too short) only AFTER confirming the user exists
+        new_password: '__verify_only__check_email__',
       });
-      // If we get here, the email exists (the above only succeeds if user found and password ≥ 8 chars — but this probe is < 8, so we catch below)
+
       setStep(2);
+
     } catch (err) {
-      const msg = err.message || '';
-      if (msg.toLowerCase().includes('no account') || msg.toLowerCase().includes('not found') || msg.toLowerCase().includes('404')) {
-        setErrors({ email: 'No account found with this email address' });
-        showToastMsg('No account found with this email. Please check and try again.', 'error');
-      } else if (msg.toLowerCase().includes('8 characters') || msg.toLowerCase().includes('at least')) {
-        // Backend found the user and rejected the short probe password — email is valid, proceed to step 2
+
+      const msg = err?.message || '';
+      const lowerMsg = msg.toLowerCase();
+
+      if (
+        lowerMsg.includes('no account') ||
+        lowerMsg.includes('not found') ||
+        lowerMsg.includes('404')
+      ) {
+
+        setErrors({
+          email: 'No account found with this email address',
+        });
+
+        showToast(
+          'No account found with this email.',
+          'error'
+        );
+
+      } else if (
+        lowerMsg.includes('8 characters') ||
+        lowerMsg.includes('at least')
+      ) {
+
+        /*
+         * Backend found the user but rejected
+         * the temporary password.
+         */
+
         setStep(2);
+
       } else {
-        // Unknown error — still proceed to step 2 to avoid blocking users
+
+        /*
+         * Preserve existing behaviour:
+         * do not block the user on an unknown
+         * backend validation response.
+         */
+
         setStep(2);
       }
+
     } finally {
       setLoading(false);
     }
   };
 
+
+  /* =========================================================
+     PASSWORD STRENGTH
+     ========================================================= */
+
+  const getPasswordStrength = () => {
+
+    if (!newPassword) {
+      return {
+        score: 0,
+        label: '',
+      };
+    }
+
+    let score = 0;
+
+    if (newPassword.length >= 8) {
+      score++;
+    }
+
+    if (/[A-Z]/.test(newPassword)) {
+      score++;
+    }
+
+    if (/[0-9]/.test(newPassword)) {
+      score++;
+    }
+
+    if (/[^A-Za-z0-9]/.test(newPassword)) {
+      score++;
+    }
+
+    if (score <= 1) {
+      return {
+        score,
+        label: 'Weak',
+      };
+    }
+
+    if (score === 2) {
+      return {
+        score,
+        label: 'Fair',
+      };
+    }
+
+    if (score === 3) {
+      return {
+        score,
+        label: 'Good',
+      };
+    }
+
+    return {
+      score,
+      label: 'Strong',
+    };
+  };
+
+
+  const passwordStrength = getPasswordStrength();
+
+
+  /* =========================================================
+     RESET PASSWORD
+     ========================================================= */
+
   const handleResetPassword = async () => {
+
     const tempErrors = {};
-    if (!newPassword) tempErrors.newPassword = 'New password is required';
-    else if (newPassword.length < 8) tempErrors.newPassword = 'Password must be at least 8 characters';
-    if (!confirmPassword) tempErrors.confirmPassword = 'Please confirm your password';
-    else if (newPassword !== confirmPassword) tempErrors.confirmPassword = 'Passwords do not match';
+
+    if (!newPassword) {
+
+      tempErrors.newPassword =
+        'New password is required';
+
+    } else if (newPassword.length < 8) {
+
+      tempErrors.newPassword =
+        'Password must be at least 8 characters';
+    }
+
+    if (!confirmPassword) {
+
+      tempErrors.confirmPassword =
+        'Please confirm your password';
+
+    } else if (newPassword !== confirmPassword) {
+
+      tempErrors.confirmPassword =
+        'Passwords do not match';
+    }
 
     if (Object.keys(tempErrors).length > 0) {
+
       setErrors(tempErrors);
+
       return;
     }
+
+    Keyboard.dismiss();
+
     setErrors({});
     setLoading(true);
 
     try {
+
       await apiService.post('/auth/reset-password', {
         email: email.trim().toLowerCase(),
         new_password: newPassword,
       });
 
       setStep(3);
+
       Animated.spring(successScaleAnim, {
         toValue: 1,
         tension: 50,
@@ -108,214 +380,1545 @@ export default function ForgotPasswordScreen({ navigation }) {
 
       setTimeout(() => {
         navigation.replace('Login');
-      }, 2000);
+      }, 2200);
+
     } catch (error) {
-      const msg = error.message || '';
-      if (msg.toLowerCase().includes('no account') || msg.toLowerCase().includes('not found')) {
-        showToastMsg('No account found with this email. Please go back and try a different email.', 'error');
+
+      const msg = error?.message || '';
+      const lowerMsg = msg.toLowerCase();
+
+      if (
+        lowerMsg.includes('no account') ||
+        lowerMsg.includes('not found')
+      ) {
+
+        showToast(
+          'No account found with this email.',
+          'error'
+        );
+
       } else {
-        showToastMsg(msg || 'Could not reset password. Please try again.', 'error');
+
+        showToast(
+          msg ||
+            'Could not reset password. Please try again.',
+          'error'
+        );
       }
+
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <Toast
-        visible={toastVisible}
-        message={toastMessage}
-        type={toastType}
-        onHide={() => setToastVisible(false)}
-      />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-      >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <ScrollView
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+
+  /* =========================================================
+     CLEAR ERROR
+     ========================================================= */
+
+  const clearError = field => {
+
+    setErrors(prev => ({
+      ...prev,
+      [field]: null,
+    }));
+  };
+
+
+  /* =========================================================
+     INPUT COMPONENT
+     ========================================================= */
+
+  const renderInput = ({
+    label,
+    value,
+    onChangeText,
+    placeholder,
+    error,
+    keyboardType,
+    autoCapitalize = 'none',
+    secureTextEntry = false,
+    showToggle = false,
+    showValue = false,
+    onToggle,
+    returnKeyType = 'done',
+    onSubmitEditing,
+  }) => {
+
+    return (
+      <View style={styles.fieldContainer}>
+
+        <Text
+          style={[
+            styles.fieldLabel,
+            {
+              color: colors.text,
+            },
+          ]}
+        >
+          {label}
+        </Text>
+
+        <View
+          style={[
+            styles.inputWrapper,
+            {
+              backgroundColor: colors.input,
+              borderColor: error
+                ? colors.error
+                : colors.border,
+            },
+          ]}
+        >
+
+          <TextInput
+            value={value}
+            onChangeText={onChangeText}
+            placeholder={placeholder}
+            placeholderTextColor={colors.textMuted}
+            keyboardType={keyboardType}
+            autoCapitalize={autoCapitalize}
+            autoCorrect={false}
+            secureTextEntry={
+              secureTextEntry && !showValue
+            }
+            style={[
+              styles.textInput,
+              {
+                color: colors.text,
+              },
+            ]}
+            returnKeyType={returnKeyType}
+            onSubmitEditing={onSubmitEditing}
+          />
+
+          {showToggle && (
+            <Pressable
+              onPress={onToggle}
+              style={styles.eyeButton}
+              hitSlop={10}
+            >
+              <Ionicons
+                name={
+                  showValue
+                    ? 'eye-outline'
+                    : 'eye-off-outline'
+                }
+                size={21}
+                color={colors.textSecondary}
+              />
+            </Pressable>
+          )}
+
+        </View>
+
+        {error ? (
+          <View style={styles.errorRow}>
+
+            <Ionicons
+              name="alert-circle-outline"
+              size={15}
+              color={colors.error}
+            />
+
+            <Text
+              style={[
+                styles.errorText,
+                {
+                  color: colors.error,
+                },
+              ]}
+            >
+              {error}
+            </Text>
+
+          </View>
+        ) : null}
+
+      </View>
+    );
+  };
+
+
+  /* =========================================================
+     STEP INDICATOR
+     ========================================================= */
+
+  const renderStepIndicator = () => {
+
+    return (
+      <View style={styles.stepContainer}>
+
+        <View style={styles.stepItem}>
+
+          <View
+            style={[
+              styles.stepCircle,
+              {
+                backgroundColor:
+                  step >= 1
+                    ? colors.primary
+                    : colors.primarySoft,
+              },
+            ]}
           >
-            {/* HERO SECTION */}
-            <View style={styles.heroSection}>
-              <View style={styles.heroCircle1} />
-              <View style={styles.heroCircle2} />
-              <Text style={styles.heroLogo}>REACHLO</Text>
-              <Text style={styles.heroTitle}>
-                {step === 3 ? 'Password Reset! ✅' : 'Reset Password'}
+            {step > 1 ? (
+              <Ionicons
+                name="checkmark"
+                size={16}
+                color={colors.white}
+              />
+            ) : (
+              <Text
+                style={[
+                  styles.stepNumber,
+                  {
+                    color: colors.white,
+                  },
+                ]}
+              >
+                1
               </Text>
-              <Text style={styles.heroSubtitle}>
-                {step === 1 && "Enter your registered email to get started"}
-                {step === 2 && "Create a strong new password"}
-                {step === 3 && "You can now log in with your new password"}
+            )}
+          </View>
+
+          <Text
+            style={[
+              styles.stepText,
+              {
+                color:
+                  step >= 1
+                    ? colors.text
+                    : colors.textMuted,
+              },
+            ]}
+          >
+            Verify
+          </Text>
+
+        </View>
+
+
+        <View
+          style={[
+            styles.stepLine,
+            {
+              backgroundColor:
+                step >= 2
+                  ? colors.primary
+                  : colors.border,
+            },
+          ]}
+        />
+
+
+        <View style={styles.stepItem}>
+
+          <View
+            style={[
+              styles.stepCircle,
+              {
+                backgroundColor:
+                  step >= 2
+                    ? colors.primary
+                    : colors.primarySoft,
+              },
+            ]}
+          >
+            {step > 2 ? (
+              <Ionicons
+                name="checkmark"
+                size={16}
+                color={colors.white}
+              />
+            ) : (
+              <Text
+                style={[
+                  styles.stepNumber,
+                  {
+                    color:
+                      step >= 2
+                        ? colors.white
+                        : colors.textMuted,
+                  },
+                ]}
+              >
+                2
               </Text>
+            )}
+          </View>
+
+          <Text
+            style={[
+              styles.stepText,
+              {
+                color:
+                  step >= 2
+                    ? colors.text
+                    : colors.textMuted,
+              },
+            ]}
+          >
+            New Password
+          </Text>
+
+        </View>
+
+      </View>
+    );
+  };
+
+
+  /* =========================================================
+     HERO
+     ========================================================= */
+
+  const renderHero = () => {
+
+    return (
+      <View
+        style={[
+          styles.hero,
+          {
+            backgroundColor: colors.headerTop,
+          },
+        ]}
+      >
+
+        <View
+          style={[
+            styles.heroGlowOne,
+            {
+              backgroundColor: colors.primary,
+            },
+          ]}
+        />
+
+        <View
+          style={[
+            styles.heroGlowTwo,
+            {
+              backgroundColor: '#7C3AED',
+            },
+          ]}
+        />
+
+        <View style={styles.heroContent}>
+
+          <View style={styles.logoRow}>
+
+            <View
+              style={[
+                styles.logoIcon,
+                {
+                  backgroundColor:
+                    'rgba(255,255,255,0.16)',
+                },
+              ]}
+            >
+              <Ionicons
+                name="shield-checkmark-outline"
+                size={24}
+                color="#FFFFFF"
+              />
             </View>
 
-            {/* FLOATING CARD */}
-            <View style={styles.floatingCard}>
-              {step === 3 ? (
-                <View style={styles.successContainer}>
-                  <Animated.Text style={[styles.successIcon, { transform: [{ scale: successScaleAnim }] }]}>
-                    🔐
-                  </Animated.Text>
-                  <Text style={styles.successTitle}>Password Reset Successfully!</Text>
-                  <Text style={styles.successSubtitle}>Redirecting you to login…</Text>
-                </View>
-              ) : step === 1 ? (
-                <>
-                  {/* Step 1: Enter email */}
-                  <Text style={styles.stepLabel}>Step 1 of 2 — Verify Your Email</Text>
-                  <InputField
-                    label="Registered Email Address"
-                    value={email}
-                    onChangeText={(text) => {
-                      setEmail(text);
-                      if (errors.email) setErrors({});
-                    }}
-                    placeholder="name@example.com"
-                    error={errors.email}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    returnKeyType="done"
-                    onSubmitEditing={handleCheckEmail}
-                  />
+            <Text style={styles.logoText}>
+              REACHLO
+            </Text>
 
-                  <PrimaryButton
-                    title="Continue"
-                    onPress={handleCheckEmail}
-                    loading={loading}
-                    disabled={loading}
-                    style={styles.submitButton}
-                  />
+          </View>
 
-                  <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
-                    <Text style={styles.backText}>← Back to Login</Text>
-                  </Pressable>
-                </>
+
+          <Text style={styles.heroTitle}>
+            Reset Password
+          </Text>
+
+          <Text style={styles.heroSubtitle}>
+            Secure your account with a new password
+          </Text>
+
+        </View>
+
+      </View>
+    );
+  };
+
+
+  /* =========================================================
+     SUCCESS
+     ========================================================= */
+
+  const renderSuccess = () => {
+
+    return (
+      <Animated.View
+        style={[
+          styles.successContainer,
+          {
+            transform: [
+              {
+                scale: successScaleAnim,
+              },
+            ],
+          },
+        ]}
+      >
+
+        <View
+          style={[
+            styles.successIconContainer,
+            {
+              backgroundColor: colors.successSoft,
+              borderColor: colors.success,
+            },
+          ]}
+        >
+          <Ionicons
+            name="checkmark-circle"
+            size={64}
+            color={colors.success}
+          />
+        </View>
+
+        <Text
+          style={[
+            styles.successTitle,
+            {
+              color: colors.text,
+            },
+          ]}
+        >
+          Password Reset Successfully
+        </Text>
+
+        <Text
+          style={[
+            styles.successSubtitle,
+            {
+              color: colors.textSecondary,
+            },
+          ]}
+        >
+          Your password has been updated successfully.
+        </Text>
+
+        <View
+          style={[
+            styles.redirectPill,
+            {
+              backgroundColor: colors.primarySoft,
+            },
+          ]}
+        >
+
+          <ActivityIndicator
+            size="small"
+            color={colors.primary}
+          />
+
+          <Text
+            style={[
+              styles.redirectText,
+              {
+                color: colors.primary,
+              },
+            ]}
+          >
+            Redirecting to login...
+          </Text>
+
+        </View>
+
+      </Animated.View>
+    );
+  };
+
+
+  /* =========================================================
+     MAIN CONTENT
+     ========================================================= */
+
+  const renderContent = () => {
+
+    if (step === 3) {
+      return renderSuccess();
+    }
+
+    return (
+      <>
+
+        {renderStepIndicator()}
+
+
+        {step === 1 ? (
+
+          <>
+
+            <View style={styles.introBlock}>
+
+              <View
+                style={[
+                  styles.introIcon,
+                  {
+                    backgroundColor:
+                      colors.primarySoft,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="mail-outline"
+                  size={24}
+                  color={colors.primary}
+                />
+              </View>
+
+              <View style={styles.introTextContainer}>
+
+                <Text
+                  style={[
+                    styles.sectionTitle,
+                    {
+                      color: colors.text,
+                    },
+                  ]}
+                >
+                  Verify your email
+                </Text>
+
+                <Text
+                  style={[
+                    styles.sectionSubtitle,
+                    {
+                      color: colors.textSecondary,
+                    },
+                  ]}
+                >
+                  Enter the email address linked to
+                  your Reachlo account.
+                </Text>
+
+              </View>
+
+            </View>
+
+
+            {renderInput({
+              label: 'Registered Email Address',
+              value: email,
+              onChangeText: text => {
+                setEmail(text);
+
+                if (errors.email) {
+                  clearError('email');
+                }
+              },
+              placeholder: 'name@example.com',
+              error: errors.email,
+              keyboardType: 'email-address',
+              autoCapitalize: 'none',
+              returnKeyType: 'continue',
+              onSubmitEditing: handleCheckEmail,
+            })}
+
+
+            <Pressable
+              onPress={handleCheckEmail}
+              disabled={loading}
+              style={({ pressed }) => [
+                styles.primaryButton,
+                {
+                  backgroundColor:
+                    loading
+                      ? colors.primaryDark
+                      : colors.primary,
+                  opacity: pressed ? 0.9 : 1,
+                },
+              ]}
+            >
+
+              {loading ? (
+                <ActivityIndicator
+                  color="#FFFFFF"
+                />
               ) : (
                 <>
-                  {/* Step 2: Enter new password */}
-                  <Text style={styles.stepLabel}>Step 2 of 2 — Create New Password</Text>
-                  <Text style={styles.emailDisplay}>Account: {email}</Text>
+                  <Text style={styles.primaryButtonText}>
+                    Continue
+                  </Text>
 
-                  <PasswordInput
-                    label="New Password"
-                    value={newPassword}
-                    onChangeText={(text) => {
-                      setNewPassword(text);
-                      if (errors.newPassword) setErrors((prev) => ({ ...prev, newPassword: null }));
-                    }}
-                    placeholder="At least 8 characters"
-                    error={errors.newPassword}
-                    showStrength={true}
-                    returnKeyType="next"
+                  <Ionicons
+                    name="arrow-forward"
+                    size={20}
+                    color="#FFFFFF"
                   />
-
-                  <PasswordInput
-                    label="Confirm New Password"
-                    value={confirmPassword}
-                    onChangeText={(text) => {
-                      setConfirmPassword(text);
-                      if (errors.confirmPassword) setErrors((prev) => ({ ...prev, confirmPassword: null }));
-                    }}
-                    placeholder="Re-enter your new password"
-                    error={errors.confirmPassword}
-                    returnKeyType="done"
-                    onSubmitEditing={handleResetPassword}
-                  />
-
-                  <PrimaryButton
-                    title="Save New Password"
-                    onPress={handleResetPassword}
-                    loading={loading}
-                    disabled={loading}
-                    style={styles.submitButton}
-                  />
-
-                  <Pressable onPress={() => setStep(1)} style={styles.backBtn}>
-                    <Text style={styles.backText}>← Change Email</Text>
-                  </Pressable>
                 </>
               )}
+
+            </Pressable>
+
+
+            <Pressable
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+              disabled={loading}
+            >
+
+              <Ionicons
+                name="arrow-back"
+                size={18}
+                color={colors.primary}
+              />
+
+              <Text
+                style={[
+                  styles.backButtonText,
+                  {
+                    color: colors.primary,
+                  },
+                ]}
+              >
+                Back to Login
+              </Text>
+
+            </Pressable>
+
+          </>
+
+        ) : (
+
+          <>
+
+            <View style={styles.introBlock}>
+
+              <View
+                style={[
+                  styles.introIcon,
+                  {
+                    backgroundColor:
+                      colors.primarySoft,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={24}
+                  color={colors.primary}
+                />
+              </View>
+
+              <View style={styles.introTextContainer}>
+
+                <Text
+                  style={[
+                    styles.sectionTitle,
+                    {
+                      color: colors.text,
+                    },
+                  ]}
+                >
+                  Create a new password
+                </Text>
+
+                <Text
+                  style={[
+                    styles.sectionSubtitle,
+                    {
+                      color: colors.textSecondary,
+                    },
+                  ]}
+                >
+                  Choose a strong password that you
+                  haven't used before.
+                </Text>
+
+              </View>
+
             </View>
+
+
+            <View
+              style={[
+                styles.accountPill,
+                {
+                  backgroundColor: colors.primarySoft,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+
+              <Ionicons
+                name="mail-outline"
+                size={16}
+                color={colors.primary}
+              />
+
+              <Text
+                numberOfLines={1}
+                style={[
+                  styles.accountText,
+                  {
+                    color: colors.textSecondary,
+                  },
+                ]}
+              >
+                {email}
+              </Text>
+
+            </View>
+
+
+            {renderInput({
+              label: 'New Password',
+              value: newPassword,
+              onChangeText: text => {
+                setNewPassword(text);
+
+                if (errors.newPassword) {
+                  clearError('newPassword');
+                }
+              },
+              placeholder: 'At least 8 characters',
+              error: errors.newPassword,
+              secureTextEntry: true,
+              showToggle: true,
+              showValue: showPassword,
+              onToggle: () =>
+                setShowPassword(prev => !prev),
+              returnKeyType: 'next',
+            })}
+
+
+            {/* PASSWORD STRENGTH */}
+
+            {newPassword.length > 0 && (
+              <View style={styles.strengthContainer}>
+
+                <View style={styles.strengthHeader}>
+
+                  <Text
+                    style={[
+                      styles.strengthTitle,
+                      {
+                        color: colors.textSecondary,
+                      },
+                    ]}
+                  >
+                    Password strength
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.strengthValue,
+                      {
+                        color:
+                          passwordStrength.score >= 3
+                            ? colors.success
+                            : passwordStrength.score === 2
+                            ? colors.primary
+                            : colors.error,
+                      },
+                    ]}
+                  >
+                    {passwordStrength.label}
+                  </Text>
+
+                </View>
+
+
+                <View style={styles.strengthBars}>
+
+                  {[1, 2, 3, 4].map(index => (
+
+                    <View
+                      key={index}
+                      style={[
+                        styles.strengthBar,
+                        {
+                          backgroundColor:
+                            index <=
+                            passwordStrength.score
+                              ? passwordStrength.score >= 3
+                                ? colors.success
+                                : passwordStrength.score === 2
+                                ? colors.primary
+                                : colors.error
+                              : colors.border,
+                        },
+                      ]}
+                    />
+
+                  ))}
+
+                </View>
+
+
+                <Text
+                  style={[
+                    styles.passwordHint,
+                    {
+                      color: colors.textMuted,
+                    },
+                  ]}
+                >
+                  Use 8+ characters with uppercase,
+                  numbers and symbols for a stronger
+                  password.
+                </Text>
+
+              </View>
+            )}
+
+
+            {renderInput({
+              label: 'Confirm New Password',
+              value: confirmPassword,
+              onChangeText: text => {
+                setConfirmPassword(text);
+
+                if (errors.confirmPassword) {
+                  clearError('confirmPassword');
+                }
+              },
+              placeholder: 'Re-enter your new password',
+              error: errors.confirmPassword,
+              secureTextEntry: true,
+              showToggle: true,
+              showValue: showConfirmPassword,
+              onToggle: () =>
+                setShowConfirmPassword(
+                  prev => !prev
+                ),
+              returnKeyType: 'done',
+              onSubmitEditing: handleResetPassword,
+            })}
+
+
+            <Pressable
+              onPress={handleResetPassword}
+              disabled={loading}
+              style={({ pressed }) => [
+                styles.primaryButton,
+                {
+                  backgroundColor:
+                    loading
+                      ? colors.primaryDark
+                      : colors.primary,
+                  opacity: pressed ? 0.9 : 1,
+                },
+              ]}
+            >
+
+              {loading ? (
+                <ActivityIndicator
+                  color="#FFFFFF"
+                />
+              ) : (
+                <>
+                  <Text style={styles.primaryButtonText}>
+                    Save New Password
+                  </Text>
+
+                  <Ionicons
+                    name="checkmark"
+                    size={20}
+                    color="#FFFFFF"
+                  />
+                </>
+              )}
+
+            </Pressable>
+
+
+            <Pressable
+              onPress={() => {
+                setStep(1);
+                setErrors({});
+              }}
+              style={styles.backButton}
+              disabled={loading}
+            >
+
+              <Ionicons
+                name="arrow-back"
+                size={18}
+                color={colors.primary}
+              />
+
+              <Text
+                style={[
+                  styles.backButtonText,
+                  {
+                    color: colors.primary,
+                  },
+                ]}
+              >
+                Change Email
+              </Text>
+
+            </Pressable>
+
+          </>
+
+        )}
+
+      </>
+    );
+  };
+
+
+  /* =========================================================
+     RETURN
+     ========================================================= */
+
+  return (
+
+    <SafeAreaView
+      style={[
+        styles.container,
+        {
+          backgroundColor: colors.background,
+        },
+      ]}
+      edges={['top', 'left', 'right']}
+    >
+
+      <StatusBar
+        barStyle={
+          isDarkMode
+            ? 'light-content'
+            : 'light-content'
+        }
+        backgroundColor={colors.headerTop}
+      />
+
+
+      <KeyboardAvoidingView
+        behavior={
+          Platform.OS === 'ios'
+            ? 'padding'
+            : 'height'
+        }
+        style={styles.keyboardView}
+      >
+
+        <TouchableWithoutFeedback
+          onPress={Keyboard.dismiss}
+        >
+
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={
+              styles.scrollContent
+            }
+          >
+
+            {renderHero()}
+
+
+            <View
+              style={[
+                styles.card,
+                {
+                  backgroundColor:
+                    colors.surface,
+                  borderColor:
+                    colors.border,
+                },
+              ]}
+            >
+
+              {renderContent()}
+
+            </View>
+
+
+            <View style={styles.footer}>
+
+              <View
+                style={[
+                  styles.secureBadge,
+                  {
+                    backgroundColor:
+                      colors.primarySoft,
+                  },
+                ]}
+              >
+
+                <Ionicons
+                  name="shield-checkmark-outline"
+                  size={15}
+                  color={colors.primary}
+                />
+
+                <Text
+                  style={[
+                    styles.secureText,
+                    {
+                      color: colors.textSecondary,
+                    },
+                  ]}
+                >
+                  Your account information is secure
+                </Text>
+
+              </View>
+
+            </View>
+
           </ScrollView>
+
         </TouchableWithoutFeedback>
+
       </KeyboardAvoidingView>
+
+
+      {/* =====================================================
+          CUSTOM TOAST
+          ===================================================== */}
+
+      {toast.visible && (
+
+        <View
+          style={[
+            styles.toast,
+            {
+              backgroundColor:
+                toast.type === 'error'
+                  ? colors.errorSoft
+                  : colors.surfaceElevated,
+
+              borderColor:
+                toast.type === 'error'
+                  ? colors.error
+                  : colors.border,
+            },
+          ]}
+        >
+
+          <Ionicons
+            name={
+              toast.type === 'error'
+                ? 'alert-circle'
+                : 'information-circle'
+            }
+            size={20}
+            color={
+              toast.type === 'error'
+                ? colors.error
+                : colors.primary
+            }
+          />
+
+          <Text
+            style={[
+              styles.toastText,
+              {
+                color: colors.text,
+              },
+            ]}
+          >
+            {toast.message}
+          </Text>
+
+        </View>
+
+      )}
+
     </SafeAreaView>
   );
 }
 
+
+/* =========================================================
+   STYLES
+   ========================================================= */
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.BACKGROUND },
-  keyboardView: { flex: 1 },
-  scrollContent: { paddingBottom: 40 },
-  heroSection: {
-    backgroundColor: COLORS.PRIMARY,
-    paddingTop: 56,
-    paddingBottom: 64,
+
+  container: {
+    flex: 1,
+  },
+
+  keyboardView: {
+    flex: 1,
+  },
+
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 30,
+  },
+
+
+  /* =======================================================
+     HERO
+     ======================================================= */
+
+  hero: {
+    minHeight: 250,
     paddingHorizontal: 24,
+    paddingTop: 28,
+    paddingBottom: 72,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+
+  heroContent: {
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
-    overflow: 'hidden',
+    zIndex: 2,
   },
-  heroCircle1: {
+
+  heroGlowOne: {
     position: 'absolute',
-    width: 200, height: 200, borderRadius: 100,
-    backgroundColor: COLORS.ACCENT_CYAN,
-    opacity: 0.15, top: -50, right: -50,
+    width: 230,
+    height: 230,
+    borderRadius: 115,
+    right: -80,
+    top: -90,
+    opacity: 0.18,
   },
-  heroCircle2: {
+
+  heroGlowTwo: {
     position: 'absolute',
-    width: 150, height: 150, borderRadius: 75,
-    backgroundColor: COLORS.ACCENT_PURPLE,
-    opacity: 0.1, bottom: -30, left: -30,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    left: -100,
+    bottom: -100,
+    opacity: 0.16,
   },
-  heroLogo: {
-    fontSize: FONT_SIZES.BASE, fontWeight: FONT_WEIGHTS.BOLD,
-    color: COLORS.WHITE, letterSpacing: 4, marginBottom: 6, opacity: 0.9,
+
+  logoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 18,
   },
+
+  logoIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+
+  logoText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 3.2,
+  },
+
   heroTitle: {
-    fontSize: FONT_SIZES.XXL, fontWeight: FONT_WEIGHTS.BOLD,
-    color: COLORS.WHITE, marginBottom: 4, textAlign: 'center',
+    color: '#FFFFFF',
+    fontSize: 32,
+    lineHeight: 39,
+    fontWeight: '800',
+    textAlign: 'center',
+    letterSpacing: -0.7,
+    marginBottom: 8,
   },
+
   heroSubtitle: {
-    fontSize: FONT_SIZES.SM, color: COLORS.PRIMARY_ULTRA_LIGHT,
-    fontWeight: FONT_WEIGHTS.MEDIUM, textAlign: 'center',
+    color: 'rgba(255,255,255,0.82)',
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '500',
+    textAlign: 'center',
+    maxWidth: 310,
   },
-  floatingCard: {
-    backgroundColor: COLORS.WHITE, borderRadius: 24,
-    marginHorizontal: 20, marginTop: -28,
-    paddingHorizontal: 20, paddingVertical: 24,
-    shadowColor: COLORS.PRIMARY,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.12, shadowRadius: 16, elevation: 8,
+
+
+  /* =======================================================
+     CARD
+     ======================================================= */
+
+  card: {
+    marginHorizontal: 18,
+    marginTop: -42,
+    borderRadius: 28,
+    borderWidth: 1,
+    paddingHorizontal: 22,
+    paddingTop: 24,
+    paddingBottom: 26,
+
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 8,
   },
-  stepLabel: {
-    fontSize: FONT_SIZES.XS, fontWeight: FONT_WEIGHTS.SEMIBOLD,
-    color: COLORS.PRIMARY, marginBottom: 16, letterSpacing: 0.5,
+
+
+  /* =======================================================
+     STEP INDICATOR
+     ======================================================= */
+
+  stepContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 28,
+    paddingHorizontal: 6,
   },
-  emailDisplay: {
-    fontSize: FONT_SIZES.SM, color: COLORS.TEXT_SECONDARY,
-    marginBottom: 16, fontStyle: 'italic',
+
+  stepItem: {
+    alignItems: 'center',
+    minWidth: 68,
   },
-  submitButton: { marginTop: 8, marginBottom: 16 },
-  backBtn: { alignItems: 'center', paddingVertical: 8 },
-  backText: {
-    fontSize: FONT_SIZES.SM, color: COLORS.PRIMARY,
-    fontWeight: FONT_WEIGHTS.MEDIUM,
+
+  stepCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 7,
   },
-  successContainer: { alignItems: 'center', paddingVertical: 24 },
-  successIcon: { fontSize: 64, marginBottom: 16 },
-  successTitle: {
-    fontSize: FONT_SIZES.LG, fontWeight: FONT_WEIGHTS.BOLD,
-    color: COLORS.TEXT_PRIMARY, marginBottom: 8, textAlign: 'center',
+
+  stepNumber: {
+    fontSize: 13,
+    fontWeight: '800',
   },
-  successSubtitle: {
-    fontSize: FONT_SIZES.SM, color: COLORS.TEXT_SECONDARY,
+
+  stepText: {
+    fontSize: 11,
+    fontWeight: '700',
     textAlign: 'center',
   },
+
+  stepLine: {
+    height: 2,
+    flex: 1,
+    marginHorizontal: 8,
+    marginBottom: 22,
+  },
+
+
+  /* =======================================================
+     INTRO
+     ======================================================= */
+
+  introBlock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+
+  introIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+
+  introTextContainer: {
+    flex: 1,
+  },
+
+  sectionTitle: {
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: '800',
+    marginBottom: 3,
+  },
+
+  sectionSubtitle: {
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '500',
+  },
+
+
+  /* =======================================================
+     INPUT
+     ======================================================= */
+
+  fieldContainer: {
+    marginBottom: 18,
+  },
+
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '800',
+    marginBottom: 8,
+    letterSpacing: 0.1,
+  },
+
+  inputWrapper: {
+    minHeight: 58,
+    borderRadius: 16,
+    borderWidth: 1.2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+
+  textInput: {
+    flex: 1,
+    minHeight: 56,
+    fontSize: 15,
+    fontWeight: '500',
+    paddingVertical: 0,
+  },
+
+  eyeButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 6,
+  },
+
+  errorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 7,
+    paddingHorizontal: 2,
+  },
+
+  errorText: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 5,
+    flex: 1,
+  },
+
+
+  /* =======================================================
+     ACCOUNT PILL
+     ======================================================= */
+
+  accountPill: {
+    minHeight: 42,
+    borderRadius: 13,
+    borderWidth: 1,
+    paddingHorizontal: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+
+  accountText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+
+
+  /* =======================================================
+     PASSWORD STRENGTH
+     ======================================================= */
+
+  strengthContainer: {
+    marginTop: -5,
+    marginBottom: 19,
+  },
+
+  strengthHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+
+  strengthTitle: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+
+  strengthValue: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+
+  strengthBars: {
+    flexDirection: 'row',
+    gap: 5,
+  },
+
+  strengthBar: {
+    height: 4,
+    flex: 1,
+    borderRadius: 4,
+  },
+
+  passwordHint: {
+    fontSize: 10.5,
+    lineHeight: 16,
+    marginTop: 8,
+  },
+
+
+  /* =======================================================
+     PRIMARY BUTTON
+     ======================================================= */
+
+  primaryButton: {
+    minHeight: 58,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    marginTop: 5,
+
+    shadowColor: '#2563EB',
+    shadowOffset: {
+      width: 0,
+      height: 7,
+    },
+    shadowOpacity: 0.22,
+    shadowRadius: 13,
+    elevation: 5,
+  },
+
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+    marginRight: 10,
+  },
+
+
+  /* =======================================================
+     BACK BUTTON
+     ======================================================= */
+
+  backButton: {
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    marginTop: 10,
+  },
+
+  backButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginLeft: 7,
+  },
+
+
+  /* =======================================================
+     SUCCESS
+     ======================================================= */
+
+  successContainer: {
+    alignItems: 'center',
+    paddingVertical: 28,
+    paddingHorizontal: 8,
+  },
+
+  successIconContainer: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 22,
+  },
+
+  successTitle: {
+    fontSize: 22,
+    lineHeight: 29,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+
+  successSubtitle: {
+    fontSize: 14,
+    lineHeight: 21,
+    fontWeight: '500',
+    textAlign: 'center',
+    maxWidth: 290,
+  },
+
+  redirectPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 20,
+    paddingHorizontal: 15,
+    paddingVertical: 9,
+    marginTop: 22,
+  },
+
+  redirectText: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginLeft: 8,
+  },
+
+
+  /* =======================================================
+     FOOTER
+     ======================================================= */
+
+  footer: {
+    alignItems: 'center',
+    paddingTop: 18,
+  },
+
+  secureBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 20,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+  },
+
+  secureText: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+
+
+  /* =======================================================
+     TOAST
+     ======================================================= */
+
+  toast: {
+    position: 'absolute',
+    left: 18,
+    right: 18,
+    bottom: 25,
+
+    minHeight: 54,
+    borderRadius: 16,
+    borderWidth: 1,
+
+    flexDirection: 'row',
+    alignItems: 'center',
+
+    paddingHorizontal: 15,
+
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 7,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 15,
+    elevation: 7,
+  },
+
+  toastText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+    marginLeft: 9,
+  },
+
 });

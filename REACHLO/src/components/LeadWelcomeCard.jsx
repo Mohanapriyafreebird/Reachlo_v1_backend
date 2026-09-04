@@ -1,23 +1,27 @@
-import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import React, { useRef } from 'react';
+import { Animated, View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInDown, Layout, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const ActionCard = ({ action, onPress }) => {
-  const scale = useSharedValue(1);
-  
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }]
-  }));
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const animateScale = (toValue) => {
+    Animated.spring(scale, {
+      toValue,
+      useNativeDriver: true,
+      friction: 7,
+      tension: 80,
+    }).start();
+  };
 
   return (
     <Pressable
-      onPressIn={() => { scale.value = withSpring(0.98); }}
-      onPressOut={() => { scale.value = withSpring(1); }}
+      onPressIn={() => animateScale(0.98)}
+      onPressOut={() => animateScale(1)}
       onPress={() => onPress(action)}
     >
-      <Animated.View style={[styles.actionCard, animatedStyle]}>
+      <Animated.View style={[styles.actionCard, { transform: [{ scale }] }]}>
         <View style={styles.actionIconContainer}>
           <Ionicons name={action.icon} size={18} color="#2563EB" />
         </View>
@@ -104,12 +108,33 @@ export default function LeadWelcomeCard({ campaign, business, onQuickAction }) {
   const actions = getQuickActions(campaign?.category);
   const busName = business?.name || 'the business';
   const campTitle = campaign?.title || 'this campaign';
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(16)).current;
+
+  React.useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [opacity, translateY]);
 
   return (
     <Animated.View 
-      entering={FadeInDown.duration(400)} 
-      layout={Layout.springify()} 
-      style={styles.cardContainer}
+      style={[
+        styles.cardContainer,
+        {
+          opacity,
+          transform: [{ translateY }],
+        },
+      ]}
     >
       <LinearGradient colors={['#F0F9FF', '#FFFFFF']} style={styles.gradientBg} borderRadius={20} />
       

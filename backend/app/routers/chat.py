@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 from typing import List
 from app.database import get_db
@@ -107,29 +107,59 @@ def create_thread(
 @router.get("/threads", response_model=List[ChatThreadResponse])
 def list_threads(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """List all threads for the authenticated user."""
+    # Eager-load all relationships in ONE query to eliminate N+1 DB hits
+    eager = (
+        joinedload(ChatThread.campaign).joinedload(Campaign.business),
+        joinedload(ChatThread.buyer),
+        joinedload(ChatThread.seller),
+        joinedload(ChatThread.messages),
+    )
     if current_user.role == "BUYER":
-        threads = db.query(ChatThread).filter(ChatThread.buyer_id == current_user.id).order_by(ChatThread.last_message_at.desc()).all()
+        threads = (
+            db.query(ChatThread)
+            .options(*eager)
+            .filter(ChatThread.buyer_id == current_user.id)
+            .order_by(ChatThread.last_message_at.desc())
+            .all()
+        )
     else:
-        threads = db.query(ChatThread).filter(ChatThread.seller_id == current_user.id).order_by(ChatThread.last_message_at.desc()).all()
-        
+        threads = (
+            db.query(ChatThread)
+            .options(*eager)
+            .filter(ChatThread.seller_id == current_user.id)
+            .order_by(ChatThread.last_message_at.desc())
+            .all()
+        )
+
     return [get_thread_display_info(t, current_user) for t in threads]
 
 
 @router.get("/threads/{thread_id}/messages", response_model=List[ChatMessageResponse])
 def list_messages(thread_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Get message history for a thread."""
-    thread = db.query(ChatThread).filter(ChatThread.id == thread_id).first()
+    thread = (
+        db.query(ChatThread)
+        .filter(ChatThread.id == thread_id)
+        .first()
+    )
     if not thread or (thread.buyer_id != current_user.id and thread.seller_id != current_user.id):
         raise HTTPException(status_code=404, detail="Thread not found.")
-        
-    messages = db.query(ChatMessage).filter(ChatMessage.thread_id == thread_id).order_by(ChatMessage.created_at.asc()).all()
-    
+
+    # Eager-load sender in the same query to avoid N+1 per message
+    messages = (
+        db.query(ChatMessage)
+        .options(joinedload(ChatMessage.sender))
+        .filter(ChatMessage.thread_id == thread_id)
+        .order_by(ChatMessage.created_at.asc())
+        .all()
+    )
+
     res = []
     for m in messages:
         r = ChatMessageResponse.from_orm(m)
         r.sender_name = m.sender.name if m.sender else None
         res.append(r)
-        
+
     return res
 
 

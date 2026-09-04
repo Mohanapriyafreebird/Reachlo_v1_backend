@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { View, Text, TextInput, StyleSheet, Animated, Pressable } from 'react-native';
 import COLORS from '../constants/colors';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/typography';
+import { useTheme } from '../context/ThemeContext';
 
 const PasswordInput = React.forwardRef(({
   label,
@@ -10,20 +11,22 @@ const PasswordInput = React.forwardRef(({
   placeholder = '••••••••',
   error,
   editable = true,
+  theme: themeVariant = 'buyer',
   returnKeyType,
   onSubmitEditing,
   blurOnSubmit,
   showStrength = false,
   ...props
 }, ref) => {
+  const { theme } = useTheme();
   const [isFocused, setIsFocused] = useState(false);
   const [isSecure, setIsSecure] = useState(true);
   const focusAnim = useRef(new Animated.Value(0)).current;
   const widthAnim = useRef(new Animated.Value(0)).current;
 
   const getPasswordStrength = (pass) => {
-    if (!pass) return { score: 0, text: '', color: COLORS.BORDER };
-    if (pass.length < 8) return { score: 1, text: 'Too short', color: COLORS.ERROR };
+    if (!pass) return { score: 0, text: '', color: theme.border };
+    if (pass.length < 8) return { score: 1, text: 'Too short', color: theme.error };
     
     const hasUpper = /[A-Z]/.test(pass);
     const hasLower = /[a-z]/.test(pass);
@@ -33,14 +36,14 @@ const PasswordInput = React.forwardRef(({
     const mixCount = [hasUpper, hasLower, hasNumber, hasSpecial].filter(Boolean).length;
     
     if (pass.length >= 12 && hasUpper && hasLower && hasNumber) {
-      return { score: 3, text: 'Strong', color: COLORS.SUCCESS };
+      return { score: 3, text: 'Strong', color: theme.success };
     }
     
     if (pass.length >= 8 && mixCount >= 2) {
-      return { score: 2, text: 'Fair', color: '#F59E0B' }; // Amber
+      return { score: 2, text: 'Fair', color: '#F59E0B' };
     }
     
-    return { score: 1, text: 'Too short', color: COLORS.ERROR };
+    return { score: 1, text: 'Too short', color: theme.error };
   };
 
   const strength = getPasswordStrength(value);
@@ -81,10 +84,13 @@ const PasswordInput = React.forwardRef(({
   };
 
   const borderColor = error
-    ? COLORS.ERROR
+    ? theme.error
     : focusAnim.interpolate({
         inputRange: [0, 1],
-        outputRange: [COLORS.BORDER, COLORS.BORDER_FOCUS],
+        outputRange: [
+          theme.inputBorder,
+          theme.borderFocus
+        ],
       });
 
   const animatedWidth = widthAnim.interpolate({
@@ -94,10 +100,10 @@ const PasswordInput = React.forwardRef(({
 
   return (
     <View style={styles.container}>
-      {label && <Text style={styles.label}>{label}</Text>}
+      {label && <Text style={[styles.label, { color: theme.textSecondary }]}>{label}</Text>}
       <Animated.View style={[
         styles.inputContainer,
-        { borderColor },
+        { borderColor, backgroundColor: theme.inputBackground },
         !editable && styles.disabledContainer
       ]}>
         <TextInput
@@ -105,7 +111,7 @@ const PasswordInput = React.forwardRef(({
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
-          placeholderTextColor={COLORS.TEXT_PLACEHOLDER}
+          placeholderTextColor={theme.inputPlaceholder}
           secureTextEntry={isSecure}
           editable={editable}
           returnKeyType={returnKeyType}
@@ -113,7 +119,11 @@ const PasswordInput = React.forwardRef(({
           blurOnSubmit={blurOnSubmit}
           onFocus={handleFocus}
           onBlur={handleBlur}
-          style={[styles.input, !editable && styles.disabledInput]}
+          style={[
+            styles.input,
+            { color: theme.inputText },
+            !editable && { color: theme.textSecondary }
+          ]}
           autoCapitalize="none"
           {...props}
         />
@@ -124,13 +134,13 @@ const PasswordInput = React.forwardRef(({
           accessibilityLabel={isSecure ? "Show password" : "Hide password"}
           accessibilityRole="button"
         >
-          <Text style={styles.eyeText}>{isSecure ? 'Show' : 'Hide'}</Text>
+          <Text style={[styles.eyeText, { color: theme.sellerPrimary }]}>{isSecure ? 'Show' : 'Hide'}</Text>
         </Pressable>
       </Animated.View>
       
       {showStrength && value.length > 0 && (
         <View style={styles.strengthContainer}>
-          <View style={styles.strengthBarBackground}>
+          <View style={[styles.strengthBarBackground, { backgroundColor: theme.border }]}>
             <Animated.View style={[
               styles.strengthBarActive,
               { width: animatedWidth, backgroundColor: strength.color }
@@ -142,7 +152,7 @@ const PasswordInput = React.forwardRef(({
         </View>
       )}
 
-      {error && <Text style={styles.errorText}>{error}</Text>}
+      {error && <Text style={[styles.errorText, { color: theme.error }]}>{error}</Text>}
     </View>
   );
 });
@@ -155,7 +165,6 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   label: {
-    color: COLORS.TEXT_SECONDARY,
     fontSize: FONT_SIZES.SM,
     fontWeight: FONT_WEIGHTS.MEDIUM,
     marginBottom: 6,
@@ -163,7 +172,6 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FAFAFA',
     borderWidth: 1,
     borderRadius: 24,
     paddingHorizontal: 14,
@@ -175,13 +183,9 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     height: '100%',
-    color: COLORS.TEXT_PRIMARY,
     fontSize: FONT_SIZES.BASE,
     fontWeight: FONT_WEIGHTS.REGULAR,
     padding: 0,
-  },
-  disabledInput: {
-    color: COLORS.TEXT_SECONDARY,
   },
   eyeButton: {
     padding: 8,
@@ -192,7 +196,6 @@ const styles = StyleSheet.create({
   eyeText: {
     fontSize: FONT_SIZES.SM,
     fontWeight: FONT_WEIGHTS.BOLD,
-    color: COLORS.PRIMARY,
   },
   strengthContainer: {
     marginTop: 6,
@@ -203,7 +206,6 @@ const styles = StyleSheet.create({
   strengthBarBackground: {
     flex: 1,
     height: 4,
-    backgroundColor: COLORS.BORDER,
     borderRadius: 2,
     overflow: 'hidden',
     marginRight: 10,
@@ -217,7 +219,6 @@ const styles = StyleSheet.create({
     fontWeight: FONT_WEIGHTS.MEDIUM,
   },
   errorText: {
-    color: COLORS.ERROR,
     fontSize: FONT_SIZES.XS,
     fontWeight: FONT_WEIGHTS.REGULAR,
     marginTop: 4,

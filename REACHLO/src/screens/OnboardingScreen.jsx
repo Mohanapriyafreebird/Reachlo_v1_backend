@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import COLORS from '../constants/colors';
+import { useTheme } from '../context/ThemeContext';
 import { FONT_SIZES, FONT_WEIGHTS, LINE_HEIGHTS } from '../constants/typography';
 import PrimaryButton from '../components/PrimaryButton';
 
@@ -37,6 +38,7 @@ const SLIDES = [
 ];
 
 export default function OnboardingScreen({ navigation }) {
+  const { theme, isDarkMode } = useTheme();
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef(null);
 
@@ -71,9 +73,9 @@ export default function OnboardingScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       {currentIndex < 2 && (
-        <View style={styles.header}>
+        <View style={[styles.header, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
           <Pressable
             onPress={handleSkip}
             style={styles.skipButton}

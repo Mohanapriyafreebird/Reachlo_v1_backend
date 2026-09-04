@@ -12,11 +12,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import COLORS from '../constants/colors';
+import { useRoleTheme } from '../context/ThemeContext';
 import { FONT_SIZES, FONT_WEIGHTS } from '../constants/typography';
 
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 
-export default function PrivacyPolicyScreen({ navigation }) {
+export default function PrivacyPolicyScreen({ navigation, route }) {
+  const { theme, isDarkMode } = useRoleTheme(route?.params?.themeRole);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
 
@@ -37,20 +39,20 @@ export default function PrivacyPolicyScreen({ navigation }) {
   }, []);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
       {/* BACKGROUND GRADIENT BLOBS */}
       <View style={styles.bgBlobTopRight} />
       <View style={styles.bgBlobBottomLeft} />
 
       {/* 1. GLASSMORPHISM HEADER */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
         <Pressable 
           style={({ pressed }) => [styles.backButton, pressed && styles.pressed]} 
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="chevron-back" size={24} color={COLORS.TEXT_PRIMARY} />
+          <Ionicons name="chevron-back" size={24} color={theme.text} />
         </Pressable>
-        <Text style={styles.headerLogo}>REACHLO</Text>
+        <Text style={[styles.headerLogo, { color: theme.text }]}>REACHLO</Text>
         <View style={styles.headerRight}>
           <Feather name="shield" size={20} color={COLORS.PRIMARY} />
         </View>
@@ -64,37 +66,37 @@ export default function PrivacyPolicyScreen({ navigation }) {
             <Text style={styles.badgeText}>PRIVACY & SECURITY</Text>
           </View>
           
-          <Text style={styles.heroTitle}>Privacy Policy</Text>
+          <Text style={[styles.heroTitle, { color: theme.text }]}>Privacy Policy</Text>
           <Text style={styles.heroSubtitleHighlight}>Your privacy. Our priority.</Text>
-          <Text style={styles.heroDesc}>
+          <Text style={[styles.heroDesc, { color: theme.textSecondary }]}>
             Learn how REACHLO collects, uses and protects your information.
           </Text>
-          <Text style={styles.lastUpdated}>Last Updated • August 2026</Text>
+          <Text style={[styles.lastUpdated, { color: theme.textTertiary }]}>Last Updated • August 2026</Text>
         </Animated.View>
 
         {/* 3. PRIVACY PROMISE CARD */}
         <View style={styles.section}>
-          <View style={[styles.glassCard, styles.glassBorder]}>
+          <View style={[styles.glassCard, styles.glassBorder, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
             <View style={{ marginBottom: 16 }}>
               <Feather name="lock" size={24} color={COLORS.PRIMARY} />
             </View>
-            <Text style={styles.sectionTitle}>Your data is protected.</Text>
-            <Text style={styles.bodyText}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Your data is protected.</Text>
+            <Text style={[styles.bodyText, { color: theme.textSecondary }]}>
               We are committed to protecting your personal information and your right to privacy.
             </Text>
             
             <View style={styles.indicatorsContainer}>
               <View style={styles.indicatorRow}>
                 <Feather name="check-circle" size={16} color={COLORS.PRIMARY} />
-                <Text style={styles.indicatorText}>Secure Storage</Text>
+                <Text style={[styles.indicatorText, { color: theme.text }]}>Secure Storage</Text>
               </View>
               <View style={styles.indicatorRow}>
                 <Feather name="check-circle" size={16} color={COLORS.PRIMARY} />
-                <Text style={styles.indicatorText}>HTTPS/TLS</Text>
+                <Text style={[styles.indicatorText, { color: theme.text }]}>HTTPS/TLS</Text>
               </View>
               <View style={styles.indicatorRow}>
                 <Feather name="check-circle" size={16} color={COLORS.PRIMARY} />
-                <Text style={styles.indicatorText}>Password Hashing</Text>
+                <Text style={[styles.indicatorText, { color: theme.text }]}>Password Hashing</Text>
               </View>
             </View>
           </View>
@@ -102,71 +104,71 @@ export default function PrivacyPolicyScreen({ navigation }) {
 
         {/* 4. QUICK PRIVACY OVERVIEW */}
         <View style={styles.section}>
-          <Text style={styles.sectionHeader}>Privacy at a Glance</Text>
+          <Text style={[styles.sectionHeader, { color: theme.text }]}>Privacy at a Glance</Text>
           <View style={styles.gridContainer2x2}>
-            <View style={[styles.gridCardSmall, styles.glassBorder]}>
+            <View style={[styles.gridCardSmall, styles.glassBorder, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
               <Feather name="lock" size={20} color={COLORS.PRIMARY} style={styles.gridIcon} />
-              <Text style={styles.gridCardTitle}>Secure</Text>
-              <Text style={styles.gridCardDesc}>Encrypted data</Text>
+              <Text style={[styles.gridCardTitle, { color: theme.text }]}>Secure</Text>
+              <Text style={[styles.gridCardDesc, { color: theme.textSecondary }]}>Encrypted data</Text>
             </View>
-            <View style={[styles.gridCardSmall, styles.glassBorder]}>
+            <View style={[styles.gridCardSmall, styles.glassBorder, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
               <Feather name="eye-off" size={20} color={COLORS.PRIMARY} style={styles.gridIcon} />
-              <Text style={styles.gridCardTitle}>Private</Text>
-              <Text style={styles.gridCardDesc}>No data selling</Text>
+              <Text style={[styles.gridCardTitle, { color: theme.text }]}>Private</Text>
+              <Text style={[styles.gridCardDesc, { color: theme.textSecondary }]}>No data selling</Text>
             </View>
-            <View style={[styles.gridCardSmall, styles.glassBorder]}>
+            <View style={[styles.gridCardSmall, styles.glassBorder, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
               <Feather name="shield" size={20} color={COLORS.PRIMARY} style={styles.gridIcon} />
-              <Text style={styles.gridCardTitle}>Protected</Text>
-              <Text style={styles.gridCardDesc}>Controlled access</Text>
+              <Text style={[styles.gridCardTitle, { color: theme.text }]}>Protected</Text>
+              <Text style={[styles.gridCardDesc, { color: theme.textSecondary }]}>Controlled access</Text>
             </View>
-            <View style={[styles.gridCardSmall, styles.glassBorder]}>
+            <View style={[styles.gridCardSmall, styles.glassBorder, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
               <Feather name="user-check" size={20} color={COLORS.PRIMARY} style={styles.gridIcon} />
-              <Text style={styles.gridCardTitle}>Your Rights</Text>
-              <Text style={styles.gridCardDesc}>Access & deletion</Text>
+              <Text style={[styles.gridCardTitle, { color: theme.text }]}>Your Rights</Text>
+              <Text style={[styles.gridCardDesc, { color: theme.textSecondary }]}>Access & deletion</Text>
             </View>
           </View>
         </View>
 
         {/* 5. INFORMATION WE COLLECT */}
         <View style={styles.section}>
-          <Text style={styles.sectionHeader}>Information We Collect</Text>
-          <Text style={styles.sectionSubHeader}>We collect only the information needed to provide and improve REACHLO.</Text>
+          <Text style={[styles.sectionHeader, { color: theme.text }]}>Information We Collect</Text>
+          <Text style={[styles.sectionSubHeader, { color: theme.textSecondary }]}>We collect only the information needed to provide and improve REACHLO.</Text>
           
           <View style={styles.listContainer}>
-            <View style={[styles.listItemCard, styles.glassBorder]}>
+            <View style={[styles.listItemCard, styles.glassBorder, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
               <View style={styles.listItemHeader}>
                 <Feather name="user" size={20} color={COLORS.PRIMARY} />
-                <Text style={styles.listItemTitle}>Account Details</Text>
+                <Text style={[styles.listItemTitle, { color: theme.text }]}>Account Details</Text>
                 <View style={styles.tagRequired}><Text style={styles.tagTextRequired}>Required</Text></View>
               </View>
-              <Text style={styles.listItemText}>Name, email address, mobile number, city and password.</Text>
+              <Text style={[styles.listItemText, { color: theme.textSecondary }]}>Name, email address, mobile number, city and password.</Text>
             </View>
 
-            <View style={[styles.listItemCard, styles.glassBorder]}>
+            <View style={[styles.listItemCard, styles.glassBorder, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
               <View style={styles.listItemHeader}>
                 <Feather name="briefcase" size={20} color={COLORS.PRIMARY} />
-                <Text style={styles.listItemTitle}>Business Details</Text>
+                <Text style={[styles.listItemTitle, { color: theme.text }]}>Business Details</Text>
                 <View style={styles.tagSeller}><Text style={styles.tagTextSeller}>Sellers</Text></View>
               </View>
-              <Text style={styles.listItemText}>Business name, description, USP, location and category.</Text>
+              <Text style={[styles.listItemText, { color: theme.textSecondary }]}>Business name, description, USP, location and category.</Text>
             </View>
 
-            <View style={[styles.listItemCard, styles.glassBorder]}>
+            <View style={[styles.listItemCard, styles.glassBorder, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
               <View style={styles.listItemHeader}>
                 <Ionicons name="megaphone-outline" size={20} color={COLORS.PRIMARY} />
-                <Text style={styles.listItemTitle}>Campaign Content</Text>
+                <Text style={[styles.listItemTitle, { color: theme.text }]}>Campaign Content</Text>
                 <View style={styles.tagSeller}><Text style={styles.tagTextSeller}>Sellers</Text></View>
               </View>
-              <Text style={styles.listItemText}>Text, images, offers and settings you create for campaigns.</Text>
+              <Text style={[styles.listItemText, { color: theme.textSecondary }]}>Text, images, offers and settings you create for campaigns.</Text>
             </View>
 
-            <View style={[styles.listItemCard, styles.glassBorder]}>
+            <View style={[styles.listItemCard, styles.glassBorder, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
               <View style={styles.listItemHeader}>
                 <Feather name="camera" size={20} color={COLORS.PRIMARY} />
-                <Text style={styles.listItemTitle}>Profile Picture</Text>
+                <Text style={[styles.listItemTitle, { color: theme.text }]}>Profile Picture</Text>
                 <View style={styles.tagOptional}><Text style={styles.tagTextOptional}>Optional</Text></View>
               </View>
-              <Text style={styles.listItemText}>An optional photo you upload to personalize your account.</Text>
+              <Text style={[styles.listItemText, { color: theme.textSecondary }]}>An optional photo you upload to personalize your account.</Text>
             </View>
           </View>
         </View>
@@ -174,63 +176,63 @@ export default function PrivacyPolicyScreen({ navigation }) {
         {/* 5.5 AUTOMATIC DATA COLLECTION */}
         <View style={styles.section}>
           <LinearGradient
-            colors={['rgba(240,249,255,0.9)', 'rgba(224,242,254,0.9)']}
-            style={[styles.glassCard, styles.glassBorder, { borderColor: 'rgba(56,189,248,0.3)' }]}
+            colors={isDarkMode ? ['rgba(240,249,255,0.05)', 'rgba(224,242,254,0.05)'] : ['rgba(240,249,255,0.9)', 'rgba(224,242,254,0.9)']}
+            style={[styles.glassCard, styles.glassBorder, { borderColor: isDarkMode ? 'rgba(56,189,248,0.2)' : 'rgba(56,189,248,0.3)' }]}
           >
-            <Text style={[styles.sectionTitle, { fontSize: FONT_SIZES.LG }]}>Collected Automatically</Text>
+            <Text style={[styles.sectionTitle, { fontSize: FONT_SIZES.LG, color: theme.text }]}>Collected Automatically</Text>
             <View style={styles.chipRow}>
-              <View style={styles.autoChip}><Feather name="smartphone" size={14} color={COLORS.PRIMARY} /><Text style={styles.autoChipText}>Device info</Text></View>
-              <View style={styles.autoChip}><Feather name="activity" size={14} color={COLORS.PRIMARY} /><Text style={styles.autoChipText}>Usage data</Text></View>
-              <View style={styles.autoChip}><Feather name="map-pin" size={14} color={COLORS.PRIMARY} /><Text style={styles.autoChipText}>City location</Text></View>
-              <View style={styles.autoChip}><Feather name="bell" size={14} color={COLORS.PRIMARY} /><Text style={styles.autoChipText}>Push tokens</Text></View>
+              <View style={[styles.autoChip, { backgroundColor: isDarkMode ? 'rgba(37,99,235,0.2)' : '#FFFFFF' }]}><Feather name="smartphone" size={14} color={COLORS.PRIMARY} /><Text style={[styles.autoChipText, { color: theme.text }]}>Device info</Text></View>
+              <View style={[styles.autoChip, { backgroundColor: isDarkMode ? 'rgba(37,99,235,0.2)' : '#FFFFFF' }]}><Feather name="activity" size={14} color={COLORS.PRIMARY} /><Text style={[styles.autoChipText, { color: theme.text }]}>Usage data</Text></View>
+              <View style={[styles.autoChip, { backgroundColor: isDarkMode ? 'rgba(37,99,235,0.2)' : '#FFFFFF' }]}><Feather name="map-pin" size={14} color={COLORS.PRIMARY} /><Text style={[styles.autoChipText, { color: theme.text }]}>City location</Text></View>
+              <View style={[styles.autoChip, { backgroundColor: isDarkMode ? 'rgba(37,99,235,0.2)' : '#FFFFFF' }]}><Feather name="bell" size={14} color={COLORS.PRIMARY} /><Text style={[styles.autoChipText, { color: theme.text }]}>Push tokens</Text></View>
             </View>
           </LinearGradient>
         </View>
 
         {/* 6. HOW WE USE YOUR INFORMATION */}
         <View style={styles.section}>
-          <Text style={styles.sectionHeader}>How We Use Your Information</Text>
-          <View style={[styles.glassCard, styles.glassBorder]}>
+          <Text style={[styles.sectionHeader, { color: theme.text }]}>How We Use Your Information</Text>
+          <View style={[styles.glassCard, styles.glassBorder, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
             <View style={styles.timeline}>
               <View style={styles.timelineItem}>
                 <View style={styles.timelineCircle}><Text style={styles.timelineNumber}>01</Text></View>
-                <Text style={styles.timelineLabel}>Create & manage your account</Text>
+                <Text style={[styles.timelineLabel, { color: theme.text }]}>Create & manage your account</Text>
               </View>
-              <View style={styles.timelineConnector} />
+              <View style={[styles.timelineConnector, { backgroundColor: theme.border }]} />
               
               <View style={styles.timelineItem}>
                 <View style={styles.timelineCircle}><Text style={styles.timelineNumber}>02</Text></View>
-                <Text style={styles.timelineLabel}>Generate AI-powered campaign content</Text>
+                <Text style={[styles.timelineLabel, { color: theme.text }]}>Generate AI-powered campaign content</Text>
               </View>
-              <View style={styles.timelineConnector} />
+              <View style={[styles.timelineConnector, { backgroundColor: theme.border }]} />
               
               <View style={styles.timelineItem}>
                 <View style={styles.timelineCircle}><Text style={styles.timelineNumber}>03</Text></View>
-                <Text style={styles.timelineLabel}>Connect buyers with relevant sellers</Text>
+                <Text style={[styles.timelineLabel, { color: theme.text }]}>Connect buyers with relevant sellers</Text>
               </View>
-              <View style={styles.timelineConnector} />
+              <View style={[styles.timelineConnector, { backgroundColor: theme.border }]} />
               
               <View style={styles.timelineItem}>
                 <View style={styles.timelineCircle}><Text style={styles.timelineNumber}>04</Text></View>
-                <Text style={styles.timelineLabel}>Send relevant notifications</Text>
+                <Text style={[styles.timelineLabel, { color: theme.text }]}>Send relevant notifications</Text>
               </View>
-              <View style={styles.timelineConnector} />
+              <View style={[styles.timelineConnector, { backgroundColor: theme.border }]} />
 
               <View style={styles.timelineItem}>
                 <View style={styles.timelineCircle}><Text style={styles.timelineNumber}>05</Text></View>
-                <Text style={styles.timelineLabel}>Improve REACHLO</Text>
+                <Text style={[styles.timelineLabel, { color: theme.text }]}>Improve REACHLO</Text>
               </View>
-              <View style={styles.timelineConnector} />
+              <View style={[styles.timelineConnector, { backgroundColor: theme.border }]} />
 
               <View style={styles.timelineItem}>
                 <View style={styles.timelineCircle}><Text style={styles.timelineNumber}>06</Text></View>
-                <Text style={styles.timelineLabel}>Protect platform security</Text>
+                <Text style={[styles.timelineLabel, { color: theme.text }]}>Protect platform security</Text>
               </View>
-              <View style={styles.timelineConnector} />
+              <View style={[styles.timelineConnector, { backgroundColor: theme.border }]} />
 
               <View style={styles.timelineItem}>
                 <View style={styles.timelineCircle}><Text style={styles.timelineNumber}>07</Text></View>
-                <Text style={styles.timelineLabel}>Comply with applicable laws</Text>
+                <Text style={[styles.timelineLabel, { color: theme.text }]}>Comply with applicable laws</Text>
               </View>
             </View>
           </View>
@@ -238,26 +240,26 @@ export default function PrivacyPolicyScreen({ navigation }) {
 
         {/* 7. INFORMATION SHARING */}
         <View style={styles.section}>
-          <Text style={styles.sectionHeader}>Information Sharing</Text>
-          <View style={[styles.glassCard, styles.glassBorder, { padding: 20 }]}>
+          <Text style={[styles.sectionHeader, { color: theme.text }]}>Information Sharing</Text>
+          <View style={[styles.glassCard, styles.glassBorder, { padding: 20, backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
             <View style={styles.noSellBadge}>
               <Text style={styles.noSellEmoji}>🚫</Text>
-              <Text style={styles.noSellText}>We do not sell, trade or rent your personal information.</Text>
+              <Text style={[styles.noSellText, { color: theme.text }]}>We do not sell, trade or rent your personal information.</Text>
             </View>
 
             <View style={styles.sharingCard}>
-              <Text style={styles.sharingTitle}>SERVICE PROVIDERS</Text>
-              <Text style={styles.sharingDesc}>Cloud infrastructure, database hosting and file storage required to operate REACHLO.</Text>
+              <Text style={[styles.sharingTitle, { color: theme.text }]}>SERVICE PROVIDERS</Text>
+              <Text style={[styles.sharingDesc, { color: theme.textSecondary }]}>Cloud infrastructure, database hosting and file storage required to operate REACHLO.</Text>
             </View>
 
             <View style={styles.sharingCard}>
-              <Text style={styles.sharingTitle}>AI PROVIDERS</Text>
-              <Text style={styles.sharingDesc}>Business descriptions may be sent to Google Gemini solely to generate campaign content. No personally identifiable information is included.</Text>
+              <Text style={[styles.sharingTitle, { color: theme.text }]}>AI PROVIDERS</Text>
+              <Text style={[styles.sharingDesc, { color: theme.textSecondary }]}>Business descriptions may be sent to Google Gemini solely to generate campaign content. No personally identifiable information is included.</Text>
             </View>
 
             <View style={styles.sharingCard}>
-              <Text style={styles.sharingTitle}>LAW ENFORCEMENT</Text>
-              <Text style={styles.sharingDesc}>Information may be disclosed when required by applicable law or to protect user rights and safety.</Text>
+              <Text style={[styles.sharingTitle, { color: theme.text }]}>LAW ENFORCEMENT</Text>
+              <Text style={[styles.sharingDesc, { color: theme.textSecondary }]}>Information may be disclosed when required by applicable law or to protect user rights and safety.</Text>
             </View>
 
             <LinearGradient
@@ -278,27 +280,27 @@ export default function PrivacyPolicyScreen({ navigation }) {
 
         {/* 8. DATA STORAGE & SECURITY */}
         <View style={styles.section}>
-          <Text style={styles.sectionHeader}>Data Storage & Security</Text>
+          <Text style={[styles.sectionHeader, { color: theme.text }]}>Data Storage & Security</Text>
           <View style={styles.gridContainer2x2}>
-            <View style={[styles.gridCardSmall, styles.glassBorder]}>
+            <View style={[styles.gridCardSmall, styles.glassBorder, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
               <Text style={{fontSize: 24, marginBottom: 8}}>🔑</Text>
-              <Text style={styles.gridCardTitle}>bcrypt</Text>
-              <Text style={styles.gridCardDesc}>Passwords are securely hashed.</Text>
+              <Text style={[styles.gridCardTitle, { color: theme.text }]}>bcrypt</Text>
+              <Text style={[styles.gridCardDesc, { color: theme.textSecondary }]}>Passwords are securely hashed.</Text>
             </View>
-            <View style={[styles.gridCardSmall, styles.glassBorder]}>
+            <View style={[styles.gridCardSmall, styles.glassBorder, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
               <Text style={{fontSize: 24, marginBottom: 8}}>☁️</Text>
-              <Text style={styles.gridCardTitle}>Encrypted Cloud</Text>
-              <Text style={styles.gridCardDesc}>Data is stored on secure cloud servers.</Text>
+              <Text style={[styles.gridCardTitle, { color: theme.text }]}>Encrypted Cloud</Text>
+              <Text style={[styles.gridCardDesc, { color: theme.textSecondary }]}>Data is stored on secure cloud servers.</Text>
             </View>
-            <View style={[styles.gridCardSmall, styles.glassBorder]}>
+            <View style={[styles.gridCardSmall, styles.glassBorder, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
               <Text style={{fontSize: 24, marginBottom: 8}}>🌐</Text>
-              <Text style={styles.gridCardTitle}>HTTPS / TLS</Text>
-              <Text style={styles.gridCardDesc}>Data is protected while in transit.</Text>
+              <Text style={[styles.gridCardTitle, { color: theme.text }]}>HTTPS / TLS</Text>
+              <Text style={[styles.gridCardDesc, { color: theme.textSecondary }]}>Data is protected while in transit.</Text>
             </View>
-            <View style={[styles.gridCardSmall, styles.glassBorder]}>
+            <View style={[styles.gridCardSmall, styles.glassBorder, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
               <Text style={{fontSize: 24, marginBottom: 8}}>🛡️</Text>
-              <Text style={styles.gridCardTitle}>Restricted Access</Text>
-              <Text style={styles.gridCardDesc}>Production data is limited to authorized team members.</Text>
+              <Text style={[styles.gridCardTitle, { color: theme.text }]}>Restricted Access</Text>
+              <Text style={[styles.gridCardDesc, { color: theme.textSecondary }]}>Production data is limited to authorized team members.</Text>
             </View>
           </View>
           
@@ -311,34 +313,34 @@ export default function PrivacyPolicyScreen({ navigation }) {
 
         {/* 9. YOUR RIGHTS */}
         <View style={styles.section}>
-          <Text style={styles.sectionHeader}>Your Privacy Rights</Text>
+          <Text style={[styles.sectionHeader, { color: theme.text }]}>Your Privacy Rights</Text>
           <View style={styles.rightsContainer}>
-            <View style={[styles.rightCard, styles.glassBorder]}>
+            <View style={[styles.rightCard, styles.glassBorder, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
               <View style={styles.rightIconContainer}><Feather name="eye" size={20} color={COLORS.PRIMARY} /></View>
               <View style={styles.rightContent}>
-                <Text style={styles.rightTitle}>ACCESS</Text>
-                <Text style={styles.rightDesc}>Request a copy of your personal data.</Text>
+                <Text style={[styles.rightTitle, { color: theme.text }]}>ACCESS</Text>
+                <Text style={[styles.rightDesc, { color: theme.textSecondary }]}>Request a copy of your personal data.</Text>
               </View>
             </View>
-            <View style={[styles.rightCard, styles.glassBorder]}>
+            <View style={[styles.rightCard, styles.glassBorder, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
               <View style={styles.rightIconContainer}><Feather name="edit-2" size={20} color={COLORS.PRIMARY} /></View>
               <View style={styles.rightContent}>
-                <Text style={styles.rightTitle}>CORRECTION</Text>
-                <Text style={styles.rightDesc}>Request correction of inaccurate information.</Text>
+                <Text style={[styles.rightTitle, { color: theme.text }]}>CORRECTION</Text>
+                <Text style={[styles.rightDesc, { color: theme.textSecondary }]}>Request correction of inaccurate information.</Text>
               </View>
             </View>
-            <View style={[styles.rightCard, styles.glassBorder]}>
+            <View style={[styles.rightCard, styles.glassBorder, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
               <View style={styles.rightIconContainer}><Feather name="trash-2" size={20} color={COLORS.PRIMARY} /></View>
               <View style={styles.rightContent}>
-                <Text style={styles.rightTitle}>DELETION</Text>
-                <Text style={styles.rightDesc}>Request deletion of your account and associated data.</Text>
+                <Text style={[styles.rightTitle, { color: theme.text }]}>DELETION</Text>
+                <Text style={[styles.rightDesc, { color: theme.textSecondary }]}>Request deletion of your account and associated data.</Text>
               </View>
             </View>
-            <View style={[styles.rightCard, styles.glassBorder]}>
+            <View style={[styles.rightCard, styles.glassBorder, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
               <View style={styles.rightIconContainer}><Feather name="bell-off" size={20} color={COLORS.PRIMARY} /></View>
               <View style={styles.rightContent}>
-                <Text style={styles.rightTitle}>OPT-OUT</Text>
-                <Text style={styles.rightDesc}>Unsubscribe from marketing notifications through app settings.</Text>
+                <Text style={[styles.rightTitle, { color: theme.text }]}>OPT-OUT</Text>
+                <Text style={[styles.rightDesc, { color: theme.textSecondary }]}>Unsubscribe from marketing notifications through app settings.</Text>
               </View>
             </View>
           </View>
@@ -346,26 +348,26 @@ export default function PrivacyPolicyScreen({ navigation }) {
 
         {/* 11. CHILDREN'S PRIVACY & 12. POLICY CHANGES */}
         <View style={styles.bottomSmallCards}>
-          <View style={[styles.compactCard, styles.glassBorder]}>
+          <View style={[styles.compactCard, styles.glassBorder, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
             <View style={styles.compactHeader}>
               <Feather name="shield" size={18} color={COLORS.PRIMARY} />
-              <Text style={styles.compactTitle}>Children's Privacy</Text>
+              <Text style={[styles.compactTitle, { color: theme.text }]}>Children's Privacy</Text>
               <View style={styles.badgeSmall}><Text style={styles.badgeSmallText}>18+</Text></View>
             </View>
-            <Text style={styles.compactDesc}>
+            <Text style={[styles.compactDesc, { color: theme.textSecondary }]}>
               REACHLO is not intended for individuals under the age of 18. We do not knowingly collect personal information from minors.
             </Text>
           </View>
 
-          <View style={[styles.compactCard, styles.glassBorder]}>
+          <View style={[styles.compactCard, styles.glassBorder, { backgroundColor: theme.cardBackground, borderColor: theme.cardBorder }]}>
             <View style={styles.compactHeader}>
               <Feather name="refresh-cw" size={18} color={COLORS.PRIMARY} />
-              <Text style={styles.compactTitle}>Changes to This Policy</Text>
+              <Text style={[styles.compactTitle, { color: theme.text }]}>Changes to This Policy</Text>
             </View>
-            <Text style={styles.compactDesc}>
+            <Text style={[styles.compactDesc, { color: theme.textSecondary }]}>
               We may update this Privacy Policy from time to time. Significant changes may be communicated through in-app notification or email.
             </Text>
-            <Text style={styles.updatedSmall}>Last Updated: August 2026</Text>
+            <Text style={[styles.updatedSmall, { color: theme.textTertiary }]}>Last Updated: August 2026</Text>
           </View>
         </View>
 

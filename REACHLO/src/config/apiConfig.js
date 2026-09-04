@@ -40,9 +40,9 @@ const DEV_HOST = getDevHost();
 
 // Production backend URL — used as fallback when EXPO_PUBLIC_API_URL is not set
 // (EAS builds do NOT read the local .env file unless env vars are set in eas.json or EAS dashboard)
-const LIVE_BASE_URL = 'https://reachlo-backend.onrender.com/api';
-const LIVE_MEDIA_BASE_URL = 'https://reachlo-backend.onrender.com';
-const LIVE_WS_BASE_URL = 'wss://reachlo-backend.onrender.com/api';
+const LIVE_BASE_URL = 'https://Reachlo-v1-backend.onrender.com/api';
+const LIVE_MEDIA_BASE_URL = 'https://Reachlo-v1-backend.onrender.com';
+const LIVE_WS_BASE_URL = 'wss://Reachlo-v1-backend.onrender.com/api';
 
 // In EAS builds EXPO_PUBLIC_API_URL is undefined unless configured on the EAS dashboard.
 // Fall back to the live Render URL to prevent the APK from hitting localhost (127.0.0.1).

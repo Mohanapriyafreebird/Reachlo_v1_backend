@@ -92,8 +92,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.SURFACE,
   },
   sellerSelected: {
-    borderColor: COLORS.SELLER_ACCENT,
-    backgroundColor: '#FFF5F0',
+    borderColor: COLORS.SELLER_PRIMARY,
+    backgroundColor: COLORS.SELLER_SURFACE,
   },
   buyerSelected: {
     borderColor: COLORS.BUYER_ACCENT,
@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
     fontWeight: FONT_WEIGHTS.SEMIBOLD,
   },
   sellerText: {
-    color: COLORS.SELLER_ACCENT,
+    color: COLORS.SELLER_PRIMARY,
   },
   buyerText: {
     color: COLORS.BUYER_ACCENT,
