@@ -32,6 +32,7 @@ Naming convention:
 """
 
 import os
+import io
 import re
 import json
 import uuid
@@ -45,6 +46,72 @@ try:
     from PIL import Image, ImageDraw, ImageFont, ImageFilter
 except ImportError:
     Image = ImageDraw = ImageFont = ImageFilter = None
+
+
+# ---------------------------------------------------------------------------
+# WebP optimization helper — shared by all image-generation paths
+# ---------------------------------------------------------------------------
+
+MAX_WEBP_WIDTH = 1024
+MAX_WEBP_HEIGHT = 768
+WEBP_QUALITY = 82
+
+
+def _optimize_to_webp(raw_bytes: bytes, save_path: str) -> str:
+    """
+    Convert raw image bytes to an optimized WebP file.
+
+    - Resizes only when the image exceeds MAX_WEBP_WIDTH×MAX_WEBP_HEIGHT,
+      preserving the original aspect ratio.
+    - Saves with WebP quality=82 and optimize=True.
+    - Returns the final file path (with .webp extension).
+    - On failure, falls back to saving the raw bytes unchanged so the
+      campaign generation pipeline never crashes due to image conversion.
+    """
+    # Ensure .webp extension regardless of what the caller specified
+    webp_path = os.path.splitext(save_path)[0] + ".webp"
+
+    if Image is None:
+        # Pillow not available — save raw bytes with original extension
+        with open(save_path, "wb") as f:
+            f.write(raw_bytes)
+        print(f"[WARN] Pillow not available, saved raw image: {save_path} ({len(raw_bytes) // 1024} KB)")
+        return save_path
+
+    try:
+        img = Image.open(io.BytesIO(raw_bytes))
+        original_size = len(raw_bytes)
+
+        # Convert palette / RGBA → RGB for WebP compatibility
+        if img.mode in ("P", "LA"):
+            img = img.convert("RGBA")
+        if img.mode == "RGBA":
+            # Composite on white background to drop alpha
+            bg = Image.new("RGB", img.size, (255, 255, 255))
+            bg.paste(img, mask=img.split()[3])
+            img = bg
+        elif img.mode != "RGB":
+            img = img.convert("RGB")
+
+        # Resize only when necessary (preserve aspect ratio)
+        w, h = img.size
+        if w > MAX_WEBP_WIDTH or h > MAX_WEBP_HEIGHT:
+            img.thumbnail((MAX_WEBP_WIDTH, MAX_WEBP_HEIGHT), Image.LANCZOS)
+
+        img.save(webp_path, "WEBP", quality=WEBP_QUALITY, optimize=True)
+        webp_size = os.path.getsize(webp_path)
+        print(
+            f"[INFO] WebP optimized: {webp_path} "
+            f"({original_size // 1024} KB -> {webp_size // 1024} KB, "
+            f"{img.size[0]}x{img.size[1]})"
+        )
+        return webp_path
+
+    except Exception as e:
+        print(f"[WARN] WebP conversion failed ({e}), saving raw image as fallback")
+        with open(save_path, "wb") as f:
+            f.write(raw_bytes)
+        return save_path
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -1457,7 +1524,7 @@ def compose_campaign_ad_thumbnail(
         raise RuntimeError("Pillow is required for ad thumbnail composition. Install backend requirements.")
 
     os.makedirs(save_dir, exist_ok=True)
-    output_path = os.path.join(save_dir, f"{uuid.uuid4().hex}.png")
+    output_path = os.path.join(save_dir, f"{uuid.uuid4().hex}.webp")
 
     # ── 1. Load + crop base image to 1200×900 ──────────────────────────────
     base = Image.open(base_image_path).convert("RGB")
@@ -1656,7 +1723,7 @@ def compose_campaign_ad_thumbnail(
         fill=(255, 255, 255, 255)
     )
 
-    canvas.convert("RGB").save(output_path, "PNG", optimize=True)
+    canvas.convert("RGB").save(output_path, "WEBP", quality=WEBP_QUALITY, optimize=True)
     print(f"[INFO] Composed ad thumbnail saved: {output_path}")
     return output_path
 
@@ -1859,7 +1926,7 @@ def generate_image_with_cloudflare(
     for model_info in cf_models:
         model_id = model_info["id"]
         payload = model_info["payload"]
-        filename = f"cf_{uuid.uuid4().hex[:12]}.png"
+        filename = f"cf_{uuid.uuid4().hex[:12]}.webp"
         filepath = os.path.join(save_dir, filename)
 
         url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{model_id}"
@@ -1882,10 +1949,8 @@ def generate_image_with_cloudflare(
         # Try raw image bytes first (preferred)
         content_type = response.headers.get("content-type", "")
         if "image" in content_type:
-            with open(filepath, "wb") as f:
-                f.write(response.content)
-            print(f"[INFO] Cloudflare image ({model_id.split('/')[-1]}) saved: {filepath} ({len(response.content) // 1024} KB)")
-            return filepath
+            saved = _optimize_to_webp(response.content, filepath)
+            return saved
 
         # Then try JSON with base64
         try:
@@ -1895,10 +1960,8 @@ def generate_image_with_cloudflare(
             if img_b64:
                 import base64
                 img_bytes = base64.b64decode(img_b64)
-                with open(filepath, "wb") as f:
-                    f.write(img_bytes)
-                print(f"[INFO] Cloudflare image (base64, {model_id.split('/')[-1]}) saved: {filepath} ({len(img_bytes) // 1024} KB)")
-                return filepath
+                saved = _optimize_to_webp(img_bytes, filepath)
+                return saved
         except Exception:
             pass
 
@@ -1938,7 +2001,7 @@ def generate_campaign_image(
     api_key = settings.IDEOGRAM_API_KEY
     if api_key:
         os.makedirs(save_dir, exist_ok=True)
-        filename = f"{uuid.uuid4().hex}.png"
+        filename = f"{uuid.uuid4().hex}.webp"
         filepath = os.path.join(save_dir, filename)
         neg = negative_prompt or FLUX_NEGATIVE_PROMPT
         url = "https://api.ideogram.ai/generate"
@@ -1964,10 +2027,9 @@ def generate_campaign_image(
                     img_url = images[0]["url"]
                     img_response = requests.get(img_url, timeout=120)
                     img_response.raise_for_status()
-                    with open(filepath, "wb") as f:
-                        f.write(img_response.content)
-                    print(f"[INFO] Ideogram image saved: {filepath}")
-                    return filepath
+                    saved = _optimize_to_webp(img_response.content, filepath)
+                    print(f"[INFO] Ideogram image saved: {saved}")
+                    return saved
             elif response.status_code in (401, 402, 403):
                 print(f"[WARN] Ideogram API auth/billing error {response.status_code} — skipping to Pollinations")
             else:
@@ -1978,16 +2040,16 @@ def generate_campaign_image(
     # ── Attempt 3: Pollinations AI (free FLUX fallback) ──────────────────────
     print("[INFO] Falling back to Pollinations AI (FLUX) for image generation...")
     os.makedirs(save_dir, exist_ok=True)
-    filename = f"{uuid.uuid4().hex}.png"
+    filename = f"{uuid.uuid4().hex}.webp"
     filepath = os.path.join(save_dir, filename)
     # Use cf_prompt_to_use (80-word FLUX-tuned) for Pollinations too
     encoded_prompt = urllib.parse.quote(cf_prompt_to_use)
     fallback_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1344&height=1008&model=flux-pro&nologo=true"
     img_response = requests.get(fallback_url, timeout=120)
     img_response.raise_for_status()
-    with open(filepath, "wb") as f:
-        f.write(img_response.content)
-    print(f"[INFO] Pollinations image saved: {filepath} ({len(img_response.content) // 1024} KB)")
+    saved = _optimize_to_webp(img_response.content, filepath)
+    print(f"[INFO] Pollinations image saved: {saved}")
+    return saved
 
 
 # ---------------------------------------------------------------------------
