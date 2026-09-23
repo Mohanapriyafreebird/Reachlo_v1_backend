@@ -1,0 +1,59 @@
+export const COLORS = {
+  // === PRIMARY BRAND ===
+  PRIMARY: '#2563EB',         // Primary Blue
+  PRIMARY_LIGHT: '#38BDF8',   // Light Blue
+  PRIMARY_DARK: '#0284C7',    // Dark Blue
+  PRIMARY_ULTRA_LIGHT: '#E0F2FE',
+
+  // === GRADIENT ACCENT ===
+  ACCENT_PURPLE: '#6366F1',   
+  ACCENT_CYAN: '#06B6D4',     
+
+  // === BACKGROUNDS ===
+  BACKGROUND: '#F8FAFC',      // Global app background
+  SURFACE: '#F0F9FF',         
+  SURFACE_2: '#E0F2FE',       
+
+  // === GLASSMORPHISM ===
+  GLASS_BACKGROUND: 'rgba(255,255,255,0.55)',
+  GLASS_BACKGROUND_LIGHT: 'rgba(255,255,255,0.7)',
+  GLASS_BORDER: 'rgba(255,255,255,0.3)',
+  GLASS_BORDER_LIGHT: 'rgba(255,255,255,0.6)',
+
+  // === TEXT ===
+  TEXT_PRIMARY: '#0C1445',    
+  TEXT_SECONDARY: '#475569',  
+  TEXT_PLACEHOLDER: '#94A3B8',
+
+  // === BORDERS ===
+  BORDER: '#BAE6FD',          
+  BORDER_FOCUS: '#2563EB',    
+
+  // === STATUS ===
+  ERROR: '#EF4444',           
+  SUCCESS: '#22C55E',         
+  WARNING: '#F59E0B',         
+
+  // === ROLES ===
+  SELLER_ACCENT: '#2563EB',   
+  BUYER_ACCENT: '#38BDF8',    
+
+  // === SELLER VIOLET THEME ===
+  SELLER_PRIMARY: '#7C3AED',
+  SELLER_PRIMARY_DARK: '#5B21B6',
+  SELLER_PRIMARY_LIGHT: '#8B5CF6',
+  SELLER_BACKGROUND: '#FAF9FF',
+  SELLER_SURFACE: '#EDE9FE',
+  SELLER_TEXT_PRIMARY: '#1F1B2D',
+  SELLER_TEXT_SECONDARY: '#6B6475',
+  SELLER_BORDER: '#DDD6FE',
+  SELLER_SUCCESS: '#16A34A',
+  SELLER_ERROR: '#DC2626',
+  SELLER_WARNING: '#F59E0B',
+
+  // === MISC ===
+  WHITE: '#FFFFFF',
+  OVERLAY: 'rgba(12, 20, 69, 0.45)',
+};
+
+export default COLORS;

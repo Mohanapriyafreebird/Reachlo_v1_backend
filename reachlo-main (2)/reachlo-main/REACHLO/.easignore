@@ -1,0 +1,15 @@
+# dependencies
+node_modules/
+
+# local build files
+.expo/
+web-build/
+android/
+ios/
+
+# production builds
+dist/
+
+# system files
+.git/
+.DS_Store
