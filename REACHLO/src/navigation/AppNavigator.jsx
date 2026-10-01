@@ -11,6 +11,7 @@ import SellerDashboardScreen from '../screens/placeholders/SellerDashboardScreen
 import DiscoveryFeedScreen from '../screens/placeholders/DiscoveryFeedScreen';
 import AdminDashboardScreen from '../screens/placeholders/AdminDashboardScreen';
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
+import OtpVerificationScreen from '../screens/OtpVerificationScreen';
 import SellerProfileScreen from '../screens/placeholders/SellerProfileScreen';
 import SellerEditProfileScreen from '../screens/placeholders/SellerEditProfileScreen';
 import SellerEditBusinessScreen from '../screens/placeholders/SellerEditBusinessScreen';
@@ -104,6 +105,11 @@ export default function AppNavigator() {
       <Stack.Screen
         name="ForgotPassword"
         component={ForgotPasswordScreen}
+        options={{ cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS }}
+      />
+      <Stack.Screen
+        name="OtpVerification"
+        component={OtpVerificationScreen}
         options={{ cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS }}
       />
       <Stack.Screen

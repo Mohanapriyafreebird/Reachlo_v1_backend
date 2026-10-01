@@ -83,6 +83,45 @@ export const authService = {
     const userStr = await AsyncStorage.getItem(USER_KEY);
     return userStr ? JSON.parse(userStr) : null;
   },
+
+  /* =========================================================
+     PASSWORD RESET — OTP FLOW
+     Three-step: request OTP → verify OTP → reset password
+     NOTE: OTP and reset tokens are NEVER persisted to storage.
+     ========================================================= */
+
+  // Step 1: Send OTP to the provided email.
+  // Backend: POST /auth/request-password-reset
+  // Body: { email }
+  // Response: { message } — backend sends OTP via email
+  requestPasswordReset: async (email) => {
+    return await apiService.post('/auth/request-password-reset', {
+      email: email.trim().toLowerCase(),
+    });
+  },
+
+  // Step 2: Verify the OTP entered by the user.
+  // Backend: POST /auth/verify-reset-otp
+  // Body: { email, otp }
+  // Response: { reset_token } — short-lived token needed to reset the password
+  verifyResetOtp: async (email, otp) => {
+    return await apiService.post('/auth/verify-reset-otp', {
+      email: email.trim().toLowerCase(),
+      otp: otp.trim(),
+    });
+  },
+
+  // Step 3: Reset the password using the verified reset token.
+  // Backend: POST /auth/reset-password
+  // Body: { email, reset_token, new_password }
+  // Response: { message }
+  resetPassword: async (email, resetToken, newPassword) => {
+    return await apiService.post('/auth/reset-password', {
+      email: email.trim().toLowerCase(),
+      reset_token: resetToken,
+      new_password: newPassword,
+    });
+  },
 };
 
 export default authService;
