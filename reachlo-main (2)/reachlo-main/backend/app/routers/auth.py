@@ -1,15 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from app.database import get_db
-from app.models import User, Business, LoginHistory
+from app.models import User, Business, LoginHistory, PasswordResetOTP
 from app.schemas import UserRegister, UserLogin, Token, UserUpdate, UserResponse
+from app.config import settings
 from pydantic import BaseModel as _PydanticModel
 from app.security import get_password_hash, verify_password, create_access_token
 from app.dependencies import get_current_user
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 import threading as _threading
+import secrets
 from app.database import SessionLocal as _SessionLocal
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -63,6 +65,14 @@ def register(user_in: UserRegister, db: Session = Depends(get_db)):
     AI enrichment (category detection, business analysis) runs in a background thread
     so the registration response is returned immediately without waiting for Gemini.
     """
+    # Block ADMIN and unknown roles from public registration
+    ALLOWED_PUBLIC_ROLES = {"BUYER", "SELLER"}
+    if user_in.role not in ALLOWED_PUBLIC_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid role. Only BUYER or SELLER are allowed."
+        )
+
     # Check if email already exists
     existing_email = db.query(User).filter(User.email == user_in.email.lower()).first()
     if existing_email:
@@ -287,6 +297,51 @@ def login(login_in: UserLogin, db: Session = Depends(get_db)):
         "user": user
     }
 
+@router.post("/admin/create-admin", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+def create_admin(
+    user_in: UserRegister,
+    db: Session = Depends(get_db),
+    x_admin_secret: str = Header(None, alias="X-Admin-Secret")
+):
+    """
+    Internal endpoint to create an ADMIN user.
+    Requires the X-Admin-Secret header matching the ADMIN_SECRET_KEY in .env.
+    """
+    if x_admin_secret != settings.ADMIN_SECRET_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid or missing X-Admin-Secret header"
+        )
+    
+    if user_in.role != "ADMIN":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Role must be ADMIN"
+        )
+        
+    existing_email = db.query(User).filter(User.email == user_in.email.lower()).first()
+    if existing_email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
+
+    clean_phone = user_in.phone.replace("+91", "").replace(" ", "").strip()
+    existing_phone = db.query(User).filter(User.phone == clean_phone).first()
+    if existing_phone:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Phone already registered")
+
+    hashed_password = get_password_hash(user_in.password)
+    new_admin = User(
+        name=user_in.name,
+        email=user_in.email.lower(),
+        phone=clean_phone,
+        password_hash=hashed_password,
+        role="ADMIN",
+        is_active=True,
+        city=user_in.city
+    )
+    db.add(new_admin)
+    db.commit()
+    db.refresh(new_admin)
+    return new_admin
 
 @router.get("/me", response_model=Token)
 def get_me(current_user: User = Depends(get_current_user)):
@@ -347,29 +402,232 @@ def change_password(
 
 from pydantic import BaseModel as PydanticBaseModel
 
-class ResetPasswordRequest(PydanticBaseModel):
+
+# ── OTP-based password reset ─────────────────────────────────────────────────
+# 3-step flow:
+#   1. POST /auth/forgot-password   → generate OTP, send to email
+#   2. POST /auth/verify-otp        → validate OTP, return short-lived reset token
+#   3. POST /auth/reset-password    → validate reset token, update password
+# ─────────────────────────────────────────────────────────────────────────────
+
+OTP_EXPIRY_MINUTES = 10
+RESET_TOKEN_EXPIRY_MINUTES = 5
+MAX_OTP_ATTEMPTS = 5
+MAX_OTP_REQUESTS_PER_HOUR = 3
+
+
+class ForgotPasswordRequest(PydanticBaseModel):
     email: str
+
+
+class VerifyOTPRequest(PydanticBaseModel):
+    email: str
+    otp: str
+
+
+class ResetPasswordRequest(PydanticBaseModel):
+    reset_token: str
     new_password: str
+
+
+@router.post("/forgot-password", status_code=200)
+async def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    """
+    Step 1: User enters their email.
+    - If account exists, generates a 6-digit OTP, stores the hash in DB,
+      and emails it to the user.
+    - Rate-limited to 3 requests per email per hour.
+    - Always returns the same success message to prevent email enumeration.
+    """
+    import asyncio
+    from app.utils.email_utils import generate_otp, send_otp_email
+    from passlib.context import CryptContext
+
+    _pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+    email = payload.email.strip().lower()
+    now = datetime.utcnow()
+
+    # Generic success message — never reveal whether the email exists
+    GENERIC_MSG = {"message": "If an account with that email exists, an OTP has been sent."}
+
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        # Return same message to prevent email enumeration
+        return GENERIC_MSG
+
+    # ── Rate limit: max 3 OTPs per email per hour ────────────────────────────
+    one_hour_ago = now - timedelta(hours=1)
+    recent_count = (
+        db.query(PasswordResetOTP)
+        .filter(
+            PasswordResetOTP.user_id == user.id,
+            PasswordResetOTP.created_at >= one_hour_ago,
+        )
+        .count()
+    )
+    if recent_count >= MAX_OTP_REQUESTS_PER_HOUR:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many OTP requests. Please wait before trying again.",
+        )
+
+    # ── Invalidate any existing unused OTPs for this user ───────────────────
+    db.query(PasswordResetOTP).filter(
+        PasswordResetOTP.user_id == user.id,
+        PasswordResetOTP.used == False,
+    ).update({"used": True})
+
+    # ── Generate + hash OTP ─────────────────────────────────────────────────
+    raw_otp = generate_otp(6)
+    otp_hash = _pwd_ctx.hash(raw_otp)
+
+    otp_record = PasswordResetOTP(
+        user_id=user.id,
+        otp_hash=otp_hash,
+        created_at=now,
+        expires_at=now + timedelta(minutes=OTP_EXPIRY_MINUTES),
+        used=False,
+        attempt_count=0,
+    )
+    db.add(otp_record)
+    db.commit()
+    db.refresh(otp_record)
+
+    # ── Send OTP email ──────────────────────────────────────────────────────
+    try:
+        await send_otp_email(
+            to_email=email,
+            otp=raw_otp,
+            user_name=user.name,
+        )
+    except Exception as exc:
+        # Log internally but do not expose error details to the client
+        print(f"[ERROR] Failed to send OTP email to {email}: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Could not send OTP email. Please try again later.",
+        )
+
+    return GENERIC_MSG
+
+
+@router.post("/verify-otp", status_code=200)
+def verify_otp(payload: VerifyOTPRequest, db: Session = Depends(get_db)):
+    """
+    Step 2: User enters the 6-digit OTP they received.
+    - Validates OTP hash, expiry, single-use, and attempt limit.
+    - On success: marks OTP as used, returns a short-lived reset token.
+    """
+    from passlib.context import CryptContext
+    _pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+    email = payload.email.strip().lower()
+    now = datetime.utcnow()
+
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired OTP.",
+        )
+
+    # Find the latest valid (unused, unexpired) OTP for this user
+    otp_record = (
+        db.query(PasswordResetOTP)
+        .filter(
+            PasswordResetOTP.user_id == user.id,
+            PasswordResetOTP.used == False,
+            PasswordResetOTP.expires_at > now,
+        )
+        .order_by(PasswordResetOTP.created_at.desc())
+        .first()
+    )
+
+    if not otp_record:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="OTP has expired or is invalid. Please request a new one.",
+        )
+
+    # ── Attempt limit ────────────────────────────────────────────────────────
+    if otp_record.attempt_count >= MAX_OTP_ATTEMPTS:
+        otp_record.used = True
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many incorrect attempts. Please request a new OTP.",
+        )
+
+    # ── Verify OTP ───────────────────────────────────────────────────────────
+    if not _pwd_ctx.verify(payload.otp.strip(), otp_record.otp_hash):
+        otp_record.attempt_count += 1
+        db.commit()
+        remaining = MAX_OTP_ATTEMPTS - otp_record.attempt_count
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Incorrect OTP. {remaining} attempt(s) remaining.",
+        )
+
+    # ── OTP is correct — mark used, issue reset token ────────────────────────
+    reset_token = secrets.token_urlsafe(32)
+    otp_record.used = True
+    otp_record.reset_token = reset_token
+    otp_record.reset_token_expires_at = now + timedelta(minutes=RESET_TOKEN_EXPIRY_MINUTES)
+    db.commit()
+
+    return {
+        "message": "OTP verified successfully.",
+        "reset_token": reset_token,
+    }
+
 
 @router.post("/reset-password", status_code=200)
 def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == payload.email.lower()).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No account found with this email address."
+    """
+    Step 3: User sets a new password using the reset token from step 2.
+    - Validates reset token, expiry.
+    - Updates the user's password and invalidates the token.
+    """
+    now = datetime.utcnow()
+
+    # Look up the OTP record by reset token
+    otp_record = (
+        db.query(PasswordResetOTP)
+        .filter(
+            PasswordResetOTP.reset_token == payload.reset_token,
+            PasswordResetOTP.reset_token_expires_at > now,
         )
-    
+        .first()
+    )
+
+    if not otp_record:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Reset token is invalid or has expired. Please start over.",
+        )
+
     if len(payload.new_password) < 8:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Password must be at least 8 characters."
+            detail="Password must be at least 8 characters.",
         )
-    
+
+    user = db.query(User).filter(User.id == otp_record.user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found.",
+        )
+
+    # ── Update password + invalidate reset token ─────────────────────────────
     user.password_hash = get_password_hash(payload.new_password)
+    # Nullify reset token so it can't be reused
+    otp_record.reset_token = None
+    otp_record.reset_token_expires_at = None
     db.commit()
-    db.refresh(user)
-    return {"message": "Password reset successfully."}
+
+    return {"message": "Password reset successfully. You can now log in."}
 
 
 from app.schemas import PushTokenUpdate

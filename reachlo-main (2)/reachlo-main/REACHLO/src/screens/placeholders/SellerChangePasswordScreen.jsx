@@ -1,4 +1,14 @@
-import React, { useMemo, useState } from 'react';
+/**
+ * SellerChangePasswordScreen.jsx
+ *
+ * Used by both Buyer (DiscoveryFeed profile) and Seller profile pages.
+ * Implements a secure 3-step OTP password change flow:
+ *   Step 1 — Confirm email (pre-filled from logged-in user) → Send OTP
+ *   Step 2 — Enter 6-digit OTP received in email
+ *   Step 3 — Enter & confirm new password using the reset_token
+ */
+
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,36 +19,42 @@ import {
   Platform,
   ActivityIndicator,
   ScrollView,
+  Animated,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { useTheme } from '../../context/ThemeContext';
-import { FONT_SIZES, FONT_WEIGHTS } from '../../constants/typography';
 import apiService from '../../services/apiService';
 import Toast from '../../components/Toast';
 
-const PasswordInput = ({
+/* ─────────────────────────────────────────
+   Reusable Input Component
+───────────────────────────────────────── */
+const Field = ({
   label,
   value,
   onChangeText,
   placeholder,
+  keyboardType = 'default',
+  secureTextEntry = false,
+  showToggle = false,
   visible,
-  setVisible,
+  onToggle,
   icon,
+  maxLength,
+  onSubmitEditing,
+  returnKeyType = 'done',
+  error,
   colors,
 }) => {
   const [isFocused, setIsFocused] = useState(false);
 
   return (
     <View style={styles.inputGroup}>
-      <Text
-        style={[
-          styles.label,
-          { color: colors.secondaryText },
-        ]}
-      >
+      <Text style={[styles.label, { color: colors.secondaryText }]}>
         {label}
       </Text>
 
@@ -46,15 +62,13 @@ const PasswordInput = ({
         style={[
           styles.inputWrapper,
           {
-            backgroundColor: isFocused
-              ? colors.inputFocused
-              : colors.input,
-            borderColor: isFocused
+            backgroundColor: isFocused ? colors.inputFocused : colors.input,
+            borderColor: error
+              ? colors.danger
+              : isFocused
               ? colors.borderFocused
               : colors.border,
-            shadowColor: isFocused
-              ? colors.accent
-              : 'transparent',
+            shadowColor: isFocused ? colors.accent : 'transparent',
             shadowOpacity: isFocused ? 0.12 : 0,
           },
         ]}
@@ -62,83 +76,111 @@ const PasswordInput = ({
         <View
           style={[
             styles.inputIconContainer,
-            {
-              backgroundColor: isFocused
-                ? colors.iconBg
-                : 'transparent',
-            },
+            { backgroundColor: isFocused ? colors.iconBg : 'transparent' },
           ]}
         >
           <Ionicons
             name={icon}
             size={19}
-            color={
-              isFocused
-                ? colors.icon
-                : colors.tertiaryText
-            }
+            color={isFocused ? colors.icon : colors.tertiaryText}
           />
         </View>
 
         <TextInput
-          style={[
-            styles.input,
-            { color: colors.text },
-          ]}
+          style={[styles.input, { color: colors.text }]}
           placeholder={placeholder}
           placeholderTextColor={colors.tertiaryText}
-          secureTextEntry={!visible}
+          secureTextEntry={showToggle ? !visible : secureTextEntry}
           value={value}
           onChangeText={onChangeText}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           autoCapitalize="none"
           autoCorrect={false}
+          keyboardType={keyboardType}
+          maxLength={maxLength}
+          onSubmitEditing={onSubmitEditing}
+          returnKeyType={returnKeyType}
         />
 
-        <Pressable
-          onPress={() => setVisible(!visible)}
-          style={styles.eyeButton}
-          hitSlop={8}
-        >
-          <Ionicons
-            name={
-              visible
-                ? 'eye-outline'
-                : 'eye-off-outline'
-            }
-            size={21}
-            color={colors.tertiaryText}
-          />
-        </Pressable>
+        {showToggle && (
+          <Pressable onPress={onToggle} style={styles.eyeButton} hitSlop={8}>
+            <Ionicons
+              name={visible ? 'eye-outline' : 'eye-off-outline'}
+              size={21}
+              color={colors.tertiaryText}
+            />
+          </Pressable>
+        )}
       </View>
+
+      {error ? (
+        <View style={styles.errorRow}>
+          <Ionicons name="alert-circle-outline" size={13} color={colors.danger} />
+          <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
+        </View>
+      ) : null}
     </View>
   );
 };
 
+/* ─────────────────────────────────────────
+   Main Screen
+───────────────────────────────────────── */
 export default function SellerChangePasswordScreen({ navigation }) {
-  const { theme, isDarkMode } = useTheme();
+  const { isDarkMode } = useTheme();
 
-  const [currentPassword, setCurrentPassword] = useState('');
+  // Steps: 1 = confirm email, 2 = enter OTP, 3 = new password
+  const [step, setStep] = useState(1);
+
+  const [email, setEmail] = useState('');
+  const [otp, setOtp] = useState('');
+  const [resetToken, setResetToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  const [savingPassword, setSavingPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [fetchingEmail, setFetchingEmail] = useState(true);
+  const [errors, setErrors] = useState({});
 
-  const [showToast, setShowToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  const [toastMsg, setToastMsg] = useState('');
   const [toastType, setToastType] = useState('success');
+  const [showToast, setShowToast] = useState(false);
 
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const successScale = useRef(new Animated.Value(0.7)).current;
 
-  /*
-   * ---------------------------------------------------------
-   * Theme-aware colors
-   * ---------------------------------------------------------
-   */
+  /* ── Fetch logged-in user's email on mount ── */
+  useEffect(() => {
+    (async () => {
+      try {
+        const me = await apiService.get('/auth/me');
+        setEmail((me.email || '').trim().toLowerCase());
+      } catch (_) {
+        // If fetch fails the user can type manually
+      } finally {
+        setFetchingEmail(false);
+      }
+    })();
+  }, []);
 
+  /* ── Toast helper ── */
+  const toast = (msg, type = 'success') => {
+    setToastMsg(msg);
+    setToastType(type);
+    setShowToast(true);
+  };
+
+  const clearError = (key) =>
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+
+  /* ── Colors ── */
   const colors = useMemo(() => {
     if (isDarkMode) {
       return {
@@ -147,1105 +189,634 @@ export default function SellerChangePasswordScreen({ navigation }) {
         surfaceElevated: '#171B2B',
         input: '#151A29',
         inputFocused: '#191E31',
-
         border: '#252B3D',
         borderFocused: '#7C5CFF',
-
         text: '#F8FAFC',
         secondaryText: '#AAB2C5',
         tertiaryText: '#737C92',
-
         accent: '#8B5CF6',
         accentBlue: '#3B82F6',
-
-        iconBg: '#211B3D',
         icon: '#A78BFA',
-
-        infoBg: '#111B2D',
-        infoBorder: '#243B62',
-
-        requirementBg: '#151A29',
-
-        danger: '#F87171',
-        success: '#34D399',
+        iconBg: 'rgba(139,92,246,0.12)',
+        gradientStart: '#7C5CFF',
+        gradientEnd: '#3B82F6',
+        stepActive: '#8B5CF6',
+        stepInactive: '#252B3D',
+        stepLine: '#252B3D',
+        danger: '#F43F5E',
+        success: '#10B981',
+        successSoft: 'rgba(16,185,129,0.12)',
+        white: '#FFFFFF',
+        primarySoft: 'rgba(139,92,246,0.10)',
       };
     }
-
     return {
-      background: '#F5F7FB',
+      background: '#F4F6FB',
       surface: '#FFFFFF',
-      surfaceElevated: '#FFFFFF',
-      input: '#F8FAFC',
-      inputFocused: '#FFFFFF',
-
-      border: '#E2E8F0',
-      borderFocused: '#7C3AED',
-
-      text: '#172554',
-      secondaryText: '#64748B',
-      tertiaryText: '#94A3B8',
-
-      accent: '#7C3AED',
-      accentBlue: '#2563EB',
-
-      iconBg: '#F0ECFF',
-      icon: '#7C3AED',
-
-      infoBg: '#EFF6FF',
-      infoBorder: '#DBEAFE',
-
-      requirementBg: '#F8FAFC',
-
-      danger: '#DC2626',
+      surfaceElevated: '#F8F9FF',
+      input: '#F1F3FA',
+      inputFocused: '#EEEEFF',
+      border: '#DDE1EF',
+      borderFocused: '#6D4AFF',
+      text: '#0F172A',
+      secondaryText: '#4B5563',
+      tertiaryText: '#9CA3AF',
+      accent: '#6D4AFF',
+      accentBlue: '#3B82F6',
+      icon: '#6D4AFF',
+      iconBg: 'rgba(109,74,255,0.08)',
+      gradientStart: '#6D4AFF',
+      gradientEnd: '#3B82F6',
+      stepActive: '#6D4AFF',
+      stepInactive: '#E5E7EB',
+      stepLine: '#DDE1EF',
+      danger: '#EF4444',
       success: '#059669',
+      successSoft: 'rgba(5,150,105,0.1)',
+      white: '#FFFFFF',
+      primarySoft: 'rgba(109,74,255,0.08)',
     };
   }, [isDarkMode]);
 
-  /*
-   * ---------------------------------------------------------
-   * Toast
-   * ---------------------------------------------------------
-   */
-
-  const displayToast = (msg, type = 'success') => {
-    setToastMessage(msg);
-    setToastType(type);
-    setShowToast(true);
-  };
-
-  /*
-   * ---------------------------------------------------------
-   * Password requirements
-   * ---------------------------------------------------------
-   */
-
-  const passwordRequirements = [
-    {
-      label: 'At least 6 characters',
-      valid: newPassword.length >= 6,
-    },
-    {
-      label: 'Passwords match',
-      valid:
-        newPassword.length > 0 &&
-        confirmPassword.length > 0 &&
-        newPassword === confirmPassword,
-    },
-  ];
-
-  /*
-   * ---------------------------------------------------------
-   * Password strength
-   * ---------------------------------------------------------
-   */
-
-  const getPasswordStrength = () => {
-    if (!newPassword) {
-      return {
-        label: 'Enter a password',
-        progress: 0,
-        color: colors.tertiaryText,
-      };
-    }
-
-    let score = 0;
-
-    if (newPassword.length >= 6) score++;
-    if (newPassword.length >= 10) score++;
-    if (/[A-Z]/.test(newPassword)) score++;
-    if (/[0-9]/.test(newPassword)) score++;
-    if (/[^A-Za-z0-9]/.test(newPassword)) score++;
-
-    if (score <= 1) {
-      return {
-        label: 'Weak',
-        progress: 25,
-        color: colors.danger,
-      };
-    }
-
-    if (score <= 3) {
-      return {
-        label: 'Good',
-        progress: 60,
-        color: '#F59E0B',
-      };
-    }
-
-    return {
-      label: 'Strong',
-      progress: 100,
-      color: colors.success,
-    };
-  };
-
-  const passwordStrength = getPasswordStrength();
-
-  /*
-   * ---------------------------------------------------------
-   * Update Password
-   * ---------------------------------------------------------
-   */
-
-  const handleUpdatePassword = async () => {
-    if (
-      !currentPassword.trim() ||
-      !newPassword.trim() ||
-      !confirmPassword.trim()
-    ) {
-      displayToast('Please fill all password fields', 'error');
+  /* ══════════════════════════════════════════
+     STEP 1 — Send OTP to email
+  ══════════════════════════════════════════ */
+  const handleSendOTP = async () => {
+    if (!email.trim()) {
+      setErrors({ email: 'Email address is required.' });
       return;
     }
-
-    if (newPassword !== confirmPassword) {
-      displayToast('New passwords do not match', 'error');
-      return;
-    }
-
-    if (newPassword.length < 6) {
-      displayToast(
-        'New password must be at least 6 characters',
-        'error'
-      );
-      return;
-    }
-
-    setSavingPassword(true);
-
+    Keyboard.dismiss();
+    setErrors({});
+    setLoading(true);
     try {
-      await apiService.put('/users/password', {
-        current_password: currentPassword,
+      await apiService.post('/auth/forgot-password', {
+        email: email.trim().toLowerCase(),
+      });
+      toast('OTP sent to your email address.', 'success');
+      setStep(2);
+    } catch (err) {
+      const msg = (err?.message || '').toLowerCase();
+      if (msg.includes('too many') || msg.includes('429')) {
+        toast('Too many attempts. Please wait before trying again.', 'error');
+      } else if (msg.includes('could not send') || msg.includes('503')) {
+        toast('Could not send OTP email. Please try again later.', 'error');
+      } else {
+        toast(err?.message || 'Something went wrong. Please try again.', 'error');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /* ══════════════════════════════════════════
+     STEP 2 — Verify OTP
+  ══════════════════════════════════════════ */
+  const handleVerifyOTP = async () => {
+    if (!otp.trim() || otp.trim().length !== 6) {
+      setErrors({ otp: 'Please enter the 6-digit OTP sent to your email.' });
+      return;
+    }
+    Keyboard.dismiss();
+    setErrors({});
+    setLoading(true);
+    try {
+      const res = await apiService.post('/auth/verify-otp', {
+        email: email.trim().toLowerCase(),
+        otp: otp.trim(),
+      });
+      setResetToken(res.reset_token);
+      setStep(3);
+    } catch (err) {
+      const msg = (err?.message || '').toLowerCase();
+      if (msg.includes('too many') || msg.includes('429')) {
+        setErrors({ otp: 'Too many incorrect attempts. Please request a new OTP.' });
+        toast('OTP locked. Please request a new one.', 'error');
+      } else if (msg.includes('expired')) {
+        setErrors({ otp: 'OTP has expired. Please request a new one.' });
+        toast('OTP expired. Going back.', 'error');
+        setTimeout(() => setStep(1), 1500);
+      } else {
+        setErrors({ otp: err?.message || 'Incorrect OTP. Please try again.' });
+        toast(err?.message || 'Incorrect OTP.', 'error');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /* ══════════════════════════════════════════
+     STEP 3 — Set new password
+  ══════════════════════════════════════════ */
+  const handleResetPassword = async () => {
+    const errs = {};
+    if (!newPassword) errs.newPassword = 'New password is required.';
+    else if (newPassword.length < 8) errs.newPassword = 'Password must be at least 8 characters.';
+    if (!confirmPassword) errs.confirmPassword = 'Please confirm your password.';
+    else if (newPassword !== confirmPassword) errs.confirmPassword = 'Passwords do not match.';
+
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      return;
+    }
+
+    Keyboard.dismiss();
+    setErrors({});
+    setLoading(true);
+    try {
+      await apiService.post('/auth/reset-password', {
+        reset_token: resetToken,
         new_password: newPassword,
       });
 
-      displayToast('Password updated successfully!', 'success');
-
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-
-      setTimeout(() => {
-        navigation.goBack();
-      }, 1500);
-    } catch (e) {
-      displayToast(
-        e.message || 'Failed to update password',
-        'error'
-      );
+      // Show success animation then go back
+      setStep(4);
+      Animated.spring(successScale, {
+        toValue: 1,
+        tension: 50,
+        friction: 6,
+        useNativeDriver: true,
+      }).start();
+      toast('Password changed successfully!', 'success');
+      setTimeout(() => navigation.goBack(), 2200);
+    } catch (err) {
+      const msg = (err?.message || '').toLowerCase();
+      if (msg.includes('invalid or has expired') || msg.includes('reset token')) {
+        toast('Session expired. Please start over.', 'error');
+        setTimeout(() => setStep(1), 1500);
+      } else {
+        toast(err?.message || 'Could not reset password. Please try again.', 'error');
+      }
     } finally {
-      setSavingPassword(false);
+      setLoading(false);
     }
   };
 
+  /* ══════════════════════════════════════════
+     Step Indicator (3 steps)
+  ══════════════════════════════════════════ */
+  const renderStepIndicator = () => (
+    <View style={styles.stepRow}>
+      {['Email', 'OTP', 'Password'].map((label, idx) => {
+        const s = idx + 1;
+        const active = step >= s;
+        const done = step > s;
+        return (
+          <React.Fragment key={label}>
+            <View style={styles.stepItem}>
+              <View
+                style={[
+                  styles.stepCircle,
+                  { backgroundColor: active ? colors.stepActive : colors.stepInactive },
+                ]}
+              >
+                {done ? (
+                  <Ionicons name="checkmark" size={14} color={colors.white} />
+                ) : (
+                  <Text
+                    style={[
+                      styles.stepNum,
+                      { color: active ? colors.white : colors.tertiaryText },
+                    ]}
+                  >
+                    {s}
+                  </Text>
+                )}
+              </View>
+              <Text
+                style={[
+                  styles.stepLabel,
+                  { color: active ? colors.text : colors.tertiaryText },
+                ]}
+              >
+                {label}
+              </Text>
+            </View>
+            {idx < 2 && (
+              <View
+                style={[
+                  styles.stepLine,
+                  { backgroundColor: step > s ? colors.stepActive : colors.stepLine },
+                ]}
+              />
+            )}
+          </React.Fragment>
+        );
+      })}
+    </View>
+  );
+
+  /* ══════════════════════════════════════════
+     Success screen (step 4)
+  ══════════════════════════════════════════ */
+  const renderSuccess = () => (
+    <Animated.View
+      style={[styles.successContainer, { transform: [{ scale: successScale }] }]}
+    >
+      <View
+        style={[
+          styles.successIconWrap,
+          { backgroundColor: colors.successSoft, borderColor: colors.success },
+        ]}
+      >
+        <Ionicons name="checkmark-circle" size={64} color={colors.success} />
+      </View>
+      <Text style={[styles.successTitle, { color: colors.text }]}>
+        Password Changed!
+      </Text>
+      <Text style={[styles.successSub, { color: colors.secondaryText }]}>
+        Your password has been updated successfully.
+      </Text>
+      <View style={[styles.redirectPill, { backgroundColor: colors.primarySoft }]}>
+        <ActivityIndicator size="small" color={colors.accent} />
+        <Text style={[styles.redirectText, { color: colors.accent }]}>
+          Going back...
+        </Text>
+      </View>
+    </Animated.View>
+  );
+
+  /* ══════════════════════════════════════════
+     RENDER
+  ══════════════════════════════════════════ */
   return (
     <SafeAreaView
-      style={[
-        styles.safeArea,
-        {
-          backgroundColor: colors.background,
-        },
-      ]}
+      style={[styles.safeArea, { backgroundColor: colors.background }]}
       edges={['top', 'bottom']}
     >
       <Toast
         visible={showToast}
-        message={toastMessage}
+        message={toastMsg}
         type={toastType}
         onHide={() => setShowToast(false)}
       />
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.keyboardContainer}
+      {/* Header */}
+      <LinearGradient
+        colors={[colors.gradientStart, colors.gradientEnd]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.header}
       >
-        {/* =====================================================
-            HEADER
-        ====================================================== */}
+        <Pressable onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={8}>
+          <Ionicons name="arrow-back" size={22} color="#FFF" />
+        </Pressable>
+        <Text style={styles.headerTitle}>Change Password</Text>
+        <View style={{ width: 38 }} />
+      </LinearGradient>
 
-        <View
-          style={[
-            styles.header,
-            {
-              backgroundColor: colors.surface,
-              borderBottomColor: colors.border,
-            },
-          ]}
-        >
-          <Pressable
-            onPress={() => navigation.goBack()}
-            style={[
-              styles.backButton,
-              {
-                backgroundColor: isDarkMode
-                  ? colors.surfaceElevated
-                  : '#F1F5F9',
-
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <Ionicons
-              name="arrow-back"
-              size={22}
-              color={colors.text}
-            />
-          </Pressable>
-
-          <View style={styles.headerContent}>
-            <Text
-              style={[
-                styles.headerTitle,
-                {
-                  color: colors.text,
-                },
-              ]}
-            >
-              Change Password
-            </Text>
-
-            <Text
-              style={[
-                styles.headerSubtitle,
-                {
-                  color: colors.secondaryText,
-                },
-              ]}
-            >
-              Keep your account secure
-            </Text>
-          </View>
-
-          <View
-            style={[
-              styles.headerIcon,
-              {
-                backgroundColor: colors.iconBg,
-              },
-            ]}
-          >
-            <Ionicons
-              name="shield-checkmark-outline"
-              size={22}
-              color={colors.icon}
-            />
-          </View>
-        </View>
-
-        {/* =====================================================
-            CONTENT
-        ====================================================== */}
-
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Security Hero */}
+          {step === 4 ? (
+            renderSuccess()
+          ) : (
+            <View style={[styles.card, { backgroundColor: colors.surface }]}>
+              {renderStepIndicator()}
 
-          <View
-            style={[
-              styles.securityHero,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <LinearGradient
-              colors={
-                isDarkMode
-                  ? ['#211A42', '#15213D']
-                  : ['#F1ECFF', '#EFF6FF']
-              }
-              style={styles.securityHeroGradient}
-            >
-              <View
-                style={[
-                  styles.securityIcon,
-                  {
-                    backgroundColor: isDarkMode
-                      ? '#2C2452'
-                      : '#FFFFFF',
-                  },
-                ]}
-              >
-                <Ionicons
-                  name="lock-closed"
-                  size={25}
-                  color={colors.icon}
-                />
-              </View>
-
-              <View style={styles.securityText}>
-                <Text
-                  style={[
-                    styles.securityTitle,
-                    {
-                      color: colors.text,
-                    },
-                  ]}
-                >
-                  Protect your account
-                </Text>
-
-                <Text
-                  style={[
-                    styles.securityDescription,
-                    {
-                      color: colors.secondaryText,
-                    },
-                  ]}
-                >
-                  Choose a strong password that you
-                  don't use anywhere else.
-                </Text>
-              </View>
-            </LinearGradient>
-          </View>
-
-          {/* =================================================
-              FORM CARD
-          ================================================== */}
-
-          <View
-            style={[
-              styles.formCard,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            {/* Card Header */}
-
-            <View style={styles.formHeader}>
-              <View>
-                <Text
-                  style={[
-                    styles.formTitle,
-                    {
-                      color: colors.text,
-                    },
-                  ]}
-                >
-                  Password Details
-                </Text>
-
-                <Text
-                  style={[
-                    styles.formSubtitle,
-                    {
-                      color: colors.secondaryText,
-                    },
-                  ]}
-                >
-                  Update your login credentials
-                </Text>
-              </View>
-
-              <View
-                style={[
-                  styles.smallLock,
-                  {
-                    backgroundColor: colors.iconBg,
-                  },
-                ]}
-              >
-                <Ionicons
-                  name="key-outline"
-                  size={19}
-                  color={colors.icon}
-                />
-              </View>
-            </View>
-
-            <View
-              style={[
-                styles.divider,
-                {
-                  backgroundColor: colors.border,
-                },
-              ]}
-            />
-
-            {/* Current Password */}
-
-            <PasswordInput
-              label="Current Password"
-              value={currentPassword}
-              onChangeText={setCurrentPassword}
-              placeholder="Enter current password"
-              visible={showCurrentPassword}
-              setVisible={setShowCurrentPassword}
-              icon="lock-closed-outline"
-              colors={colors}
-            />
-
-            {/* New Password */}
-
-            <PasswordInput
-              label="New Password"
-              value={newPassword}
-              onChangeText={setNewPassword}
-              placeholder="Create a new password"
-              visible={showNewPassword}
-              setVisible={setShowNewPassword}
-              icon="key-outline"
-              colors={colors}
-            />
-
-            {/* Password Strength */}
-
-            {newPassword.length > 0 && (
-              <View style={styles.strengthContainer}>
-                <View style={styles.strengthHeader}>
-                  <Text
-                    style={[
-                      styles.strengthLabel,
-                      {
-                        color: colors.secondaryText,
-                      },
-                    ]}
-                  >
-                    Password strength
-                  </Text>
-
-                  <Text
-                    style={[
-                      styles.strengthValue,
-                      {
-                        color: passwordStrength.color,
-                      },
-                    ]}
-                  >
-                    {passwordStrength.label}
-                  </Text>
-                </View>
-
-                <View
-                  style={[
-                    styles.progressTrack,
-                    {
-                      backgroundColor: colors.border,
-                    },
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.progressBar,
-                      {
-                        width: `${passwordStrength.progress}%`,
-                        backgroundColor:
-                          passwordStrength.color,
-                      },
-                    ]}
-                  />
-                </View>
-              </View>
-            )}
-
-            {/* Confirm Password */}
-
-            <PasswordInput
-              label="Confirm New Password"
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              placeholder="Re-enter new password"
-              visible={showConfirmPassword}
-              setVisible={setShowConfirmPassword}
-              icon="checkmark-circle-outline"
-              colors={colors}
-            />
-
-            {/* =================================================
-                REQUIREMENTS
-            ================================================== */}
-
-            <View
-              style={[
-                styles.requirementsBox,
-                {
-                  backgroundColor:
-                    colors.requirementBg,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <View style={styles.requirementsHeader}>
-                <Ionicons
-                  name="information-circle-outline"
-                  size={18}
-                  color={colors.icon}
-                />
-
-                <Text
-                  style={[
-                    styles.requirementsTitle,
-                    {
-                      color: colors.text,
-                    },
-                  ]}
-                >
-                  Password requirements
-                </Text>
-              </View>
-
-              {passwordRequirements.map(
-                (requirement, index) => (
-                  <View
-                    key={index}
-                    style={styles.requirementRow}
-                  >
-                    <Ionicons
-                      name={
-                        requirement.valid
-                          ? 'checkmark-circle'
-                          : 'ellipse-outline'
-                      }
-                      size={17}
-                      color={
-                        requirement.valid
-                          ? colors.success
-                          : colors.tertiaryText
-                      }
-                    />
-
-                    <Text
-                      style={[
-                        styles.requirementText,
-                        {
-                          color: requirement.valid
-                            ? colors.text
-                            : colors.secondaryText,
-                        },
-                      ]}
-                    >
-                      {requirement.label}
-                    </Text>
-                  </View>
-                )
-              )}
-            </View>
-          </View>
-
-          {/* Security Information */}
-
-          <View
-            style={[
-              styles.infoCard,
-              {
-                backgroundColor: colors.infoBg,
-                borderColor: colors.infoBorder,
-              },
-            ]}
-          >
-            <View
-              style={[
-                styles.infoIcon,
-                {
-                  backgroundColor: isDarkMode
-                    ? '#172746'
-                    : '#FFFFFF',
-                },
-              ]}
-            >
-              <Ionicons
-                name="shield-checkmark-outline"
-                size={21}
-                color={colors.accentBlue}
-              />
-            </View>
-
-            <View style={styles.infoTextContainer}>
-              <Text
-                style={[
-                  styles.infoTitle,
-                  {
-                    color: colors.text,
-                  },
-                ]}
-              >
-                Your account is protected
-              </Text>
-
-              <Text
-                style={[
-                  styles.infoDescription,
-                  {
-                    color: colors.secondaryText,
-                  },
-                ]}
-              >
-                Your password is securely updated
-                through your account settings.
-              </Text>
-            </View>
-          </View>
-
-          {/* Extra bottom space */}
-
-          <View style={{ height: 20 }} />
-        </ScrollView>
-
-        {/* =====================================================
-            BOTTOM ACTION
-        ====================================================== */}
-
-        <View
-          style={[
-            styles.footer,
-            {
-              backgroundColor: colors.surface,
-              borderTopColor: colors.border,
-            },
-          ]}
-        >
-          <Pressable
-            style={[
-              styles.saveButton,
-              savingPassword &&
-              styles.saveButtonDisabled,
-            ]}
-            onPress={handleUpdatePassword}
-            disabled={savingPassword}
-          >
-            <LinearGradient
-              colors={['#8B5CF6', '#2563EB']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.saveGradient}
-            >
-              {savingPassword ? (
-                <ActivityIndicator
-                  color="#FFFFFF"
-                  size="small"
-                />
-              ) : (
+              {/* ── STEP 1: Email ── */}
+              {step === 1 && (
                 <>
-                  <Ionicons
-                    name="shield-checkmark-outline"
-                    size={20}
-                    color="#FFFFFF"
-                  />
+                  <View style={styles.sectionHeader}>
+                    <View style={[styles.sectionIcon, { backgroundColor: colors.primarySoft }]}>
+                      <Ionicons name="mail-outline" size={22} color={colors.accent} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                        Confirm your email
+                      </Text>
+                      <Text style={[styles.sectionSub, { color: colors.secondaryText }]}>
+                        We'll send a one-time password to verify it's you.
+                      </Text>
+                    </View>
+                  </View>
 
-                  <Text style={styles.saveButtonText}>
-                    Update Password
-                  </Text>
+                  {fetchingEmail ? (
+                    <ActivityIndicator color={colors.accent} style={{ marginVertical: 20 }} />
+                  ) : (
+                    <Field
+                      label="Registered Email"
+                      value={email}
+                      onChangeText={(t) => { setEmail(t); clearError('email'); }}
+                      placeholder="you@example.com"
+                      icon="mail-outline"
+                      keyboardType="email-address"
+                      returnKeyType="done"
+                      onSubmitEditing={handleSendOTP}
+                      error={errors.email}
+                      colors={colors}
+                    />
+                  )}
+
+                  <Pressable
+                    onPress={handleSendOTP}
+                    disabled={loading || fetchingEmail}
+                    style={({ pressed }) => [
+                      styles.primaryBtn,
+                      { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 },
+                    ]}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#FFF" />
+                    ) : (
+                      <>
+                        <Text style={styles.primaryBtnText}>Send OTP</Text>
+                        <Ionicons name="arrow-forward" size={18} color="#FFF" />
+                      </>
+                    )}
+                  </Pressable>
                 </>
               )}
-            </LinearGradient>
-          </Pressable>
 
-          <Pressable
-            onPress={() => navigation.goBack()}
-            style={styles.cancelButton}
-          >
-            <Text
-              style={[
-                styles.cancelText,
-                {
-                  color: colors.secondaryText,
-                },
-              ]}
-            >
-              Cancel
-            </Text>
-          </Pressable>
-        </View>
+              {/* ── STEP 2: OTP ── */}
+              {step === 2 && (
+                <>
+                  <View style={styles.sectionHeader}>
+                    <View style={[styles.sectionIcon, { backgroundColor: colors.primarySoft }]}>
+                      <Ionicons name="keypad-outline" size={22} color={colors.accent} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                        Enter OTP
+                      </Text>
+                      <Text style={[styles.sectionSub, { color: colors.secondaryText }]}>
+                        A 6-digit code was sent to{' '}
+                        <Text style={{ color: colors.accent, fontWeight: '600' }}>{email}</Text>.
+                        Check your inbox.
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Field
+                    label="One-Time Password"
+                    value={otp}
+                    onChangeText={(t) => { setOtp(t.replace(/[^0-9]/g, '')); clearError('otp'); }}
+                    placeholder="6-digit OTP"
+                    icon="keypad-outline"
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    returnKeyType="done"
+                    onSubmitEditing={handleVerifyOTP}
+                    error={errors.otp}
+                    colors={colors}
+                  />
+
+                  <Pressable
+                    onPress={handleVerifyOTP}
+                    disabled={loading}
+                    style={({ pressed }) => [
+                      styles.primaryBtn,
+                      { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 },
+                    ]}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#FFF" />
+                    ) : (
+                      <>
+                        <Text style={styles.primaryBtnText}>Verify OTP</Text>
+                        <Ionicons name="arrow-forward" size={18} color="#FFF" />
+                      </>
+                    )}
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => { setOtp(''); setErrors({}); setStep(1); }}
+                    disabled={loading}
+                    style={styles.secondaryBtn}
+                  >
+                    <Ionicons name="refresh-outline" size={16} color={colors.accent} />
+                    <Text style={[styles.secondaryBtnText, { color: colors.accent }]}>
+                      Resend OTP
+                    </Text>
+                  </Pressable>
+                </>
+              )}
+
+              {/* ── STEP 3: New Password ── */}
+              {step === 3 && (
+                <>
+                  <View style={styles.sectionHeader}>
+                    <View style={[styles.sectionIcon, { backgroundColor: colors.primarySoft }]}>
+                      <Ionicons name="lock-closed-outline" size={22} color={colors.accent} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                        Set new password
+                      </Text>
+                      <Text style={[styles.sectionSub, { color: colors.secondaryText }]}>
+                        Choose a strong password that you haven't used before.
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Field
+                    label="New Password"
+                    value={newPassword}
+                    onChangeText={(t) => { setNewPassword(t); clearError('newPassword'); }}
+                    placeholder="At least 8 characters"
+                    icon="lock-closed-outline"
+                    showToggle
+                    visible={showNew}
+                    onToggle={() => setShowNew((p) => !p)}
+                    returnKeyType="next"
+                    error={errors.newPassword}
+                    colors={colors}
+                  />
+
+                  <Field
+                    label="Confirm Password"
+                    value={confirmPassword}
+                    onChangeText={(t) => { setConfirmPassword(t); clearError('confirmPassword'); }}
+                    placeholder="Repeat new password"
+                    icon="lock-closed-outline"
+                    showToggle
+                    visible={showConfirm}
+                    onToggle={() => setShowConfirm((p) => !p)}
+                    returnKeyType="done"
+                    onSubmitEditing={handleResetPassword}
+                    error={errors.confirmPassword}
+                    colors={colors}
+                  />
+
+                  <Pressable
+                    onPress={handleResetPassword}
+                    disabled={loading}
+                    style={({ pressed }) => [
+                      styles.primaryBtn,
+                      { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 },
+                    ]}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#FFF" />
+                    ) : (
+                      <>
+                        <Text style={styles.primaryBtnText}>Change Password</Text>
+                        <Ionicons name="checkmark" size={18} color="#FFF" />
+                      </>
+                    )}
+                  </Pressable>
+                </>
+              )}
+            </View>
+          )}
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-/*
-===============================================================
-STYLES
-===============================================================
-*/
-
+/* ─────────────────────────────────────────
+   Styles
+───────────────────────────────────────── */
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
-
-  keyboardContainer: {
-    flex: 1,
-  },
-
-  /*
-   * Header
-   */
+  safeArea: { flex: 1 },
 
   header: {
-    minHeight: 76,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-  },
-
-  headerContent: {
-    flex: 1,
-    marginLeft: 13,
-  },
-
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: FONT_WEIGHTS.BOLD,
-    letterSpacing: -0.3,
-  },
-
-  headerSubtitle: {
-    fontSize: 13,
-    marginTop: 3,
-  },
-
-  headerIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  /*
-   * Scroll
-   */
-
-  scrollContent: {
-    paddingHorizontal: 18,
-    paddingTop: 18,
-    paddingBottom: 10,
-  },
-
-  /*
-   * Security Hero
-   */
-
-  securityHero: {
-    borderRadius: 20,
-    overflow: 'hidden',
-    borderWidth: 1,
-    marginBottom: 16,
-
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 2,
-  },
-
-  securityHeroGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 17,
-  },
-
-  securityIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 17,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 14,
-  },
-
-  securityText: {
-    flex: 1,
-  },
-
-  securityTitle: {
-    fontSize: 17,
-    fontWeight: FONT_WEIGHTS.BOLD,
-    marginBottom: 4,
-  },
-
-  securityDescription: {
-    fontSize: 13,
-    lineHeight: 19,
-  },
-
-  /*
-   * Form
-   */
-
-  formCard: {
-    borderRadius: 22,
-    borderWidth: 1,
-    padding: 18,
-
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 5,
-    },
-    shadowOpacity: 0.045,
-    shadowRadius: 14,
-    elevation: 2,
-  },
-
-  formHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
-
-  formTitle: {
-    fontSize: 18,
-    fontWeight: FONT_WEIGHTS.BOLD,
-  },
-
-  formSubtitle: {
-    fontSize: 13,
-    marginTop: 4,
-  },
-
-  smallLock: {
-    width: 40,
-    height: 40,
-    borderRadius: 13,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  divider: {
-    height: 1,
-    marginVertical: 18,
-  },
-
-  /*
-   * Inputs
-   */
-
-  inputGroup: {
-    marginBottom: 18,
-  },
-
-  label: {
-    fontSize: 13,
-    fontWeight: FONT_WEIGHTS.SEMIBOLD || '600',
-    marginBottom: 8,
-    marginLeft: 2,
-  },
-
-  inputWrapper: {
-    height: 58,
-    borderRadius: 16,
-    borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-
-    shadowRadius: 8,
-
-    elevation: 0,
-  },
-
-  inputIconContainer: {
+  backBtn: {
     width: 38,
     height: 38,
-    borderRadius: 11,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 3,
   },
-
-  input: {
-    flex: 1,
-    height: '100%',
-    fontSize: 15,
-    paddingHorizontal: 8,
-  },
-
-  eyeButton: {
-    width: 42,
-    height: 42,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  /*
-   * Password strength
-   */
-
-  strengthContainer: {
-    marginTop: -7,
-    marginBottom: 18,
-    paddingHorizontal: 2,
-  },
-
-  strengthHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 7,
-  },
-
-  strengthLabel: {
-    fontSize: 11,
-    fontWeight: '500',
-  },
-
-  strengthValue: {
-    fontSize: 11,
+  headerTitle: {
+    fontSize: 17,
     fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
   },
 
-  progressTrack: {
-    height: 5,
-    borderRadius: 10,
-    overflow: 'hidden',
+  scroll: {
+    flexGrow: 1,
+    padding: 16,
+    paddingBottom: 40,
   },
 
-  progressBar: {
-    height: '100%',
-    borderRadius: 10,
-  },
-
-  /*
-   * Requirements
-   */
-
-  requirementsBox: {
-    borderRadius: 15,
-    borderWidth: 1,
-    padding: 14,
-    marginTop: 2,
-  },
-
-  requirementsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 11,
-  },
-
-  requirementsTitle: {
-    fontSize: 13,
-    fontWeight: FONT_WEIGHTS.BOLD,
-    marginLeft: 8,
-  },
-
-  requirementRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-
-  requirementText: {
-    fontSize: 12,
-    marginLeft: 8,
-  },
-
-  /*
-   * Information card
-   */
-
-  infoCard: {
-    marginTop: 16,
-    borderRadius: 18,
-    borderWidth: 1,
-    padding: 15,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  infoIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 13,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-
-  infoTextContainer: {
-    flex: 1,
-  },
-
-  infoTitle: {
-    fontSize: 13,
-    fontWeight: FONT_WEIGHTS.BOLD,
-    marginBottom: 3,
-  },
-
-  infoDescription: {
-    fontSize: 11.5,
-    lineHeight: 17,
-  },
-
-  /*
-   * Footer
-   */
-
-  footer: {
-    paddingHorizontal: 18,
-    paddingTop: 12,
-    paddingBottom:
-      Platform.OS === 'ios' ? 8 : 14,
-    borderTopWidth: 1,
-  },
-
-  saveButton: {
-    height: 54,
-    borderRadius: 16,
-    overflow: 'hidden',
-
-    shadowColor: '#6D28D9',
-    shadowOffset: {
-      width: 0,
-      height: 5,
-    },
-    shadowOpacity: 0.22,
-    shadowRadius: 10,
-
+  card: {
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
     elevation: 4,
   },
 
-  saveGradient: {
-    flex: 1,
+  /* Step indicator */
+  stepRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-  },
-
-  saveButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: FONT_WEIGHTS.BOLD,
-    marginLeft: 8,
-  },
-
-  saveButtonDisabled: {
-    opacity: 0.65,
-  },
-
-  cancelButton: {
-    height: 38,
     justifyContent: 'center',
+    marginBottom: 28,
+  },
+  stepItem: { alignItems: 'center', gap: 4 },
+  stepCircle: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: 'center',
-    marginTop: 2,
+    justifyContent: 'center',
   },
+  stepNum: { fontSize: 12, fontWeight: '700' },
+  stepLabel: { fontSize: 11, fontWeight: '500', marginTop: 2 },
+  stepLine: { flex: 1, height: 2, marginHorizontal: 6, marginBottom: 18 },
 
-  cancelText: {
-    fontSize: 13,
-    fontWeight: '600',
+  /* Section header */
+  sectionHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 20 },
+  sectionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+  sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 3 },
+  sectionSub: { fontSize: 13, lineHeight: 18 },
+
+  /* Input */
+  inputGroup: { marginBottom: 16 },
+  label: { fontSize: 13, fontWeight: '600', marginBottom: 6 },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    overflow: 'hidden',
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+    elevation: 0,
+  },
+  inputIconContainer: {
+    width: 42,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  input: { flex: 1, height: 48, fontSize: 14, paddingRight: 8 },
+  eyeButton: { paddingHorizontal: 12 },
+
+  errorRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  errorText: { fontSize: 12 },
+
+  /* Buttons */
+  primaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 14,
+    height: 50,
+    marginTop: 8,
+  },
+  primaryBtnText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
+
+  secondaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 14,
+    paddingVertical: 10,
+  },
+  secondaryBtnText: { fontSize: 14, fontWeight: '600' },
+
+  /* Success */
+  successContainer: {
+    alignItems: 'center',
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+  },
+  successIconWrap: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    marginBottom: 20,
+  },
+  successTitle: { fontSize: 22, fontWeight: '800', marginBottom: 8, textAlign: 'center' },
+  successSub: { fontSize: 14, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
+  redirectPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  redirectText: { fontSize: 13, fontWeight: '600' },
 });

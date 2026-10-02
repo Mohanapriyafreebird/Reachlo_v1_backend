@@ -28,6 +28,18 @@ class Settings(BaseSettings):
     CLOUDINARY_CLOUD_NAME: str | None = None
     CLOUDINARY_UPLOAD_PRESET: str | None = None
 
+    # SMTP (Gmail) — for OTP password-reset emails
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str | None = None
+    SMTP_PASSWORD: str | None = None
+
+    # Fast2SMS — SMS OTP (India, optional fallback)
+    FAST2SMS_API_KEY: str | None = None
+
+    # Admin Creation Secret
+    ADMIN_SECRET_KEY: str = "reachlo-internal-admin-2025"
+
     class Config:
         env_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
         env_file_encoding = "utf-8"
