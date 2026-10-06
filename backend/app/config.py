@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     # Admin Creation Secret
     ADMIN_SECRET_KEY: str = "reachlo-internal-admin-2025"
 
+    # CORS — comma-separated list of allowed origins.
+    # In production set this env var to your actual domains, e.g.:
+    #   ALLOWED_ORIGINS=https://reachlo.in,https://www.reachlo.in
+    # Leave empty to fall back to localhost-only (safe default).
+    ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:8081"
+
     class Config:
         env_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
         env_file_encoding = "utf-8"
