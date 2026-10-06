@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     AWS_ACCESS_KEY_ID: str | None = None
     AWS_SECRET_ACCESS_KEY: str | None = None
     AWS_REGION: str = "ap-south-1"
+    AWS_CLOUDFRONT_URL: str | None = None  # Optional CDN prefix, e.g. https://d1abc.cloudfront.net
     
     # Cloudinary Config
     CLOUDINARY_CLOUD_NAME: str | None = None
