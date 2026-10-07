@@ -119,7 +119,7 @@ export const authService = {
   // Body: { email }
   // Response: { message } — backend sends OTP via email
   requestPasswordReset: async (email) => {
-    return await apiService.post('/auth/request-password-reset', {
+    return await apiService.post('/auth/forgot-password', {
       email: email.trim().toLowerCase(),
     });
   },
@@ -129,7 +129,7 @@ export const authService = {
   // Body: { email, otp }
   // Response: { reset_token } — short-lived token needed to reset the password
   verifyResetOtp: async (email, otp) => {
-    return await apiService.post('/auth/verify-reset-otp', {
+    return await apiService.post('/auth/verify-otp', {
       email: email.trim().toLowerCase(),
       otp: otp.trim(),
     });

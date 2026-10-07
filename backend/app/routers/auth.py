@@ -410,8 +410,8 @@ from pydantic import BaseModel as PydanticBaseModel
 #   3. POST /auth/reset-password    → validate reset token, update password
 # ─────────────────────────────────────────────────────────────────────────────
 
-OTP_EXPIRY_MINUTES = 10
-RESET_TOKEN_EXPIRY_MINUTES = 5
+OTP_EXPIRY_MINUTES = 15
+RESET_TOKEN_EXPIRY_MINUTES = 15
 MAX_OTP_ATTEMPTS = 5
 MAX_OTP_REQUESTS_PER_HOUR = 3
 

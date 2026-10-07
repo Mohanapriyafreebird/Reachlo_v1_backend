@@ -189,7 +189,7 @@ export default function OtpVerificationScreen({ navigation, route }) {
     }
   };
 
-  const handleVerifyOtp = () => {
+  const handleVerifyOtp = async () => {
     const enteredOtp = otp.join('').trim();
     if (enteredOtp.length !== 6) {
       setError('Please enter all 6 digits of the verification code');
@@ -197,22 +197,30 @@ export default function OtpVerificationScreen({ navigation, route }) {
       return;
     }
 
-    Keyboard.dismiss();
-    setError('');
+    try {
+      const response = await authService.verifyResetOtp(email.trim(), enteredOtp);
+      const realResetToken = response?.reset_token;
 
-    // Trigger verify API in background
-    authService.verifyResetOtp(email.trim(), enteredOtp).catch(err => {
-      console.warn('Backend verify OTP notice:', err?.message || err);
-    });
+      if (!realResetToken) {
+        setError('OTP verification failed. Please try again.');
+        showToast('Verification failed. Please try again.', 'error');
+        return;
+      }
 
-    // Immediately navigate to Step 3 (New Password)
-    navigation.navigate('ForgotPassword', {
-      initialStep: 3,
-      email: email.trim(),
-      resetToken: 'verified_reset_token',
-      role: isSeller ? 'SELLER' : 'BUYER',
-    });
+      // Navigate to Step 3 with the real token from backend
+      navigation.navigate('ForgotPassword', {
+        initialStep: 3,
+        email: email.trim(),
+        resetToken: realResetToken,
+        role: isSeller ? 'SELLER' : 'BUYER',
+      });
+    } catch (err) {
+      const msg = err?.message || 'Invalid or expired OTP. Please try again.';
+      setError(msg);
+      showToast(msg, 'error');
+    }
   };
+
 
   /* =========================================================
      STEP INDICATOR (3 STEPS)

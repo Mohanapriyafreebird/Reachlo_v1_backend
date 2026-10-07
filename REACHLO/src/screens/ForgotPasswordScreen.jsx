@@ -198,24 +198,30 @@ export default function ForgotPasswordScreen({ navigation, route }) {
     return true;
   };
 
-  const handleRequestOtp = () => {
+  const handleRequestOtp = async () => {
     if (!validateEmail()) return;
 
     Keyboard.dismiss();
     setErrors({});
+    setLoading(true);
     const trimmedEmail = email.trim();
 
-    // Trigger backend OTP request in background without delaying UI transition
-    authService.requestPasswordReset(trimmedEmail).catch(err => {
-      console.warn('Backend OTP request notice:', err?.message || err);
-    });
-
-    // Immediately navigate to the OTP verification screen
-    navigation.navigate('OtpVerification', {
-      email: trimmedEmail,
-      role: isSeller ? 'SELLER' : 'BUYER',
-    });
+    try {
+      await authService.requestPasswordReset(trimmedEmail);
+      // Only navigate once OTP has been generated and emailed
+      navigation.navigate('OtpVerification', {
+        email: trimmedEmail,
+        role: isSeller ? 'SELLER' : 'BUYER',
+      });
+    } catch (err) {
+      const msg = err?.message || 'Failed to send OTP. Please try again.';
+      setErrors({ email: msg });
+      showToast(msg, 'error');
+    } finally {
+      setLoading(false);
+    }
   };
+
 
   /* =========================================================
      STEP 3: NEW PASSWORD VALIDATION & SUBMISSION
@@ -264,9 +270,6 @@ export default function ForgotPasswordScreen({ navigation, route }) {
 
     try {
       await authService.resetPassword(email.trim(), resetToken, newPassword);
-    } catch (error) {
-      console.warn('Backend reset password notice:', error?.message || error);
-    } finally {
       setLoading(false);
       setStep(4);
 
@@ -284,8 +287,14 @@ export default function ForgotPasswordScreen({ navigation, route }) {
           navigation.replace('BuyerLogin');
         }
       }, 2200);
+    } catch (error) {
+      setLoading(false);
+      const msg = error?.message || 'Password reset failed. Please start over.';
+      setErrors({ newPassword: msg });
+      showToast(msg, 'error');
     }
   };
+
 
   /* =========================================================
      INPUT FIELD COMPONENT

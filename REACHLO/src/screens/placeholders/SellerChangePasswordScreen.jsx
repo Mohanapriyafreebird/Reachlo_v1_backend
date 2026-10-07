@@ -313,7 +313,7 @@ export default function SellerChangePasswordScreen({ navigation }) {
     setSavingPassword(true);
 
     try {
-      await apiService.put('/users/password', {
+      await apiService.post('/auth/change-password', {
         current_password: currentPassword,
         new_password: newPassword,
       });
