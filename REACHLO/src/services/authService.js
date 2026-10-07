@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import apiService from './apiService';
 
-const TOKEN_KEY = 'reachlo_token';
+const TOKEN_KEY = 'token';
 const ROLE_KEY = 'reachlo_role';
 const USER_KEY = 'reachlo_user_details';
 
@@ -31,9 +32,9 @@ export const authService = {
       ...(longitude !== undefined && longitude !== null ? { longitude } : {}),
     });
 
-    // Save access token, role, and user details in AsyncStorage
+    // Save access token securely in SecureStore, role and user details in AsyncStorage
     const { access_token, user } = response;
-    await AsyncStorage.setItem(TOKEN_KEY, access_token);
+    await SecureStore.setItemAsync(TOKEN_KEY, access_token);
     await AsyncStorage.setItem(ROLE_KEY, response.role);
     await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
 
@@ -52,9 +53,9 @@ export const authService = {
     }
     const response = await apiService.post('/auth/login', payload);
 
-    // Save access token, role, and user details in AsyncStorage
+    // Save access token securely in SecureStore, role and user details in AsyncStorage
     const { access_token, user } = response;
-    await AsyncStorage.setItem(TOKEN_KEY, access_token);
+    await SecureStore.setItemAsync(TOKEN_KEY, access_token);
     await AsyncStorage.setItem(ROLE_KEY, response.role);
     await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
 
@@ -66,13 +67,36 @@ export const authService = {
   },
 
   logout: async () => {
-    await AsyncStorage.removeItem(TOKEN_KEY);
+    try {
+      await SecureStore.deleteItemAsync(TOKEN_KEY);
+    } catch (e) {
+      console.warn('Failed to delete token from SecureStore', e);
+    }
+    // Clean up any legacy AsyncStorage token if present
+    await AsyncStorage.removeItem('reachlo_token').catch(() => {});
+    await AsyncStorage.removeItem('token').catch(() => {});
     await AsyncStorage.removeItem(ROLE_KEY);
     await AsyncStorage.removeItem(USER_KEY);
   },
 
   getToken: async () => {
-    return await AsyncStorage.getItem(TOKEN_KEY);
+    try {
+      let token = await SecureStore.getItemAsync(TOKEN_KEY);
+      if (!token) {
+        // Check for legacy token in AsyncStorage for backward compatibility
+        const legacyToken = (await AsyncStorage.getItem('reachlo_token')) || (await AsyncStorage.getItem('token'));
+        if (legacyToken) {
+          await SecureStore.setItemAsync(TOKEN_KEY, legacyToken);
+          await AsyncStorage.removeItem('reachlo_token').catch(() => {});
+          await AsyncStorage.removeItem('token').catch(() => {});
+          token = legacyToken;
+        }
+      }
+      return token;
+    } catch (e) {
+      console.warn('Failed to get token from SecureStore', e);
+      return null;
+    }
   },
 
   getRole: async () => {
