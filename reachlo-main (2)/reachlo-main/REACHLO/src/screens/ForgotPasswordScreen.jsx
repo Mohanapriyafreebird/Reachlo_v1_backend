@@ -32,11 +32,14 @@ export default function ForgotPasswordScreen({ navigation }) {
   const { isDarkMode } = useTheme();
 
   const [step, setStep] = useState(1);
-  // 1 = verify email
-  // 2 = create new password
-  // 3 = success
+  // 1 = enter email (sends OTP)
+  // 2 = enter OTP
+  // 3 = create new password
+  // 4 = success
 
   const [email, setEmail] = useState('');
+  const [otp, setOtp] = useState('');
+  const [resetToken, setResetToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
@@ -190,68 +193,76 @@ export default function ForgotPasswordScreen({ navigation }) {
     }
 
     Keyboard.dismiss();
-
     setErrors({});
     setLoading(true);
 
     try {
-
-      /*
-       * Keep the existing backend verification behaviour.
-       * The backend will reject the temporary password
-       * after confirming whether the account exists.
-       */
-
-      await apiService.post('/auth/reset-password', {
+      // Step 1: request OTP — backend sends it to the user's email
+      await apiService.post('/auth/forgot-password', {
         email: email.trim().toLowerCase(),
-        new_password: '__verify_only__check_email__',
       });
 
+      // Always move to OTP entry step (backend returns same msg whether email exists or not)
+      showToast('OTP sent to your email address.', 'success');
       setStep(2);
 
     } catch (err) {
-
       const msg = err?.message || '';
       const lowerMsg = msg.toLowerCase();
 
-      if (
-        lowerMsg.includes('no account') ||
-        lowerMsg.includes('not found') ||
-        lowerMsg.includes('404')
-      ) {
-
-        setErrors({
-          email: 'No account found with this email address',
-        });
-
-        showToast(
-          'No account found with this email.',
-          'error'
-        );
-
-      } else if (
-        lowerMsg.includes('8 characters') ||
-        lowerMsg.includes('at least')
-      ) {
-
-        /*
-         * Backend found the user but rejected
-         * the temporary password.
-         */
-
-        setStep(2);
-
+      if (lowerMsg.includes('too many') || lowerMsg.includes('429')) {
+        showToast('Too many attempts. Please wait before trying again.', 'error');
+      } else if (lowerMsg.includes('could not send') || lowerMsg.includes('503')) {
+        showToast('Could not send OTP email. Please try again later.', 'error');
       } else {
-
-        /*
-         * Preserve existing behaviour:
-         * do not block the user on an unknown
-         * backend validation response.
-         */
-
-        setStep(2);
+        showToast(msg || 'Something went wrong. Please try again.', 'error');
       }
+    } finally {
+      setLoading(false);
+    }
+  };
 
+
+  /* =========================================================
+     VERIFY OTP
+     ========================================================= */
+
+  const handleVerifyOTP = async () => {
+
+    if (!otp.trim() || otp.trim().length !== 6) {
+      setErrors({ otp: 'Please enter the 6-digit OTP sent to your email.' });
+      return;
+    }
+
+    Keyboard.dismiss();
+    setErrors({});
+    setLoading(true);
+
+    try {
+      const response = await apiService.post('/auth/verify-otp', {
+        email: email.trim().toLowerCase(),
+        otp: otp.trim(),
+      });
+
+      // Store the reset token returned from the backend
+      setResetToken(response.reset_token);
+      setStep(3);
+
+    } catch (err) {
+      const msg = err?.message || '';
+      const lowerMsg = msg.toLowerCase();
+
+      if (lowerMsg.includes('too many') || lowerMsg.includes('429')) {
+        setErrors({ otp: 'Too many incorrect attempts. Please request a new OTP.' });
+        showToast('OTP locked. Please request a new one.', 'error');
+      } else if (lowerMsg.includes('expired')) {
+        setErrors({ otp: 'OTP has expired. Please request a new one.' });
+        showToast('OTP expired. Going back to email step.', 'error');
+        setTimeout(() => setStep(1), 1500);
+      } else {
+        setErrors({ otp: msg || 'Incorrect OTP. Please try again.' });
+        showToast(msg || 'Incorrect OTP.', 'error');
+      }
     } finally {
       setLoading(false);
     }
@@ -329,47 +340,34 @@ export default function ForgotPasswordScreen({ navigation }) {
     const tempErrors = {};
 
     if (!newPassword) {
-
-      tempErrors.newPassword =
-        'New password is required';
-
+      tempErrors.newPassword = 'New password is required';
     } else if (newPassword.length < 8) {
-
-      tempErrors.newPassword =
-        'Password must be at least 8 characters';
+      tempErrors.newPassword = 'Password must be at least 8 characters';
     }
 
     if (!confirmPassword) {
-
-      tempErrors.confirmPassword =
-        'Please confirm your password';
-
+      tempErrors.confirmPassword = 'Please confirm your password';
     } else if (newPassword !== confirmPassword) {
-
-      tempErrors.confirmPassword =
-        'Passwords do not match';
+      tempErrors.confirmPassword = 'Passwords do not match';
     }
 
     if (Object.keys(tempErrors).length > 0) {
-
       setErrors(tempErrors);
-
       return;
     }
 
     Keyboard.dismiss();
-
     setErrors({});
     setLoading(true);
 
     try {
-
+      // Step 3: reset password using the reset token from OTP verification
       await apiService.post('/auth/reset-password', {
-        email: email.trim().toLowerCase(),
+        reset_token: resetToken,
         new_password: newPassword,
       });
 
-      setStep(3);
+      setStep(4);
 
       Animated.spring(successScaleAnim, {
         toValue: 1,
@@ -383,29 +381,15 @@ export default function ForgotPasswordScreen({ navigation }) {
       }, 2200);
 
     } catch (error) {
-
       const msg = error?.message || '';
       const lowerMsg = msg.toLowerCase();
 
-      if (
-        lowerMsg.includes('no account') ||
-        lowerMsg.includes('not found')
-      ) {
-
-        showToast(
-          'No account found with this email.',
-          'error'
-        );
-
+      if (lowerMsg.includes('invalid or has expired') || lowerMsg.includes('reset token')) {
+        showToast('Session expired. Please start over.', 'error');
+        setTimeout(() => setStep(1), 1500);
       } else {
-
-        showToast(
-          msg ||
-            'Could not reset password. Please try again.',
-          'error'
-        );
+        showToast(msg || 'Could not reset password. Please try again.', 'error');
       }
-
     } finally {
       setLoading(false);
     }
@@ -549,8 +533,8 @@ export default function ForgotPasswordScreen({ navigation }) {
     return (
       <View style={styles.stepContainer}>
 
+        {/* Step 1: Email */}
         <View style={styles.stepItem}>
-
           <View
             style={[
               styles.stepCircle,
@@ -563,57 +547,30 @@ export default function ForgotPasswordScreen({ navigation }) {
             ]}
           >
             {step > 1 ? (
-              <Ionicons
-                name="checkmark"
-                size={16}
-                color={colors.white}
-              />
+              <Ionicons name="checkmark" size={16} color={colors.white} />
             ) : (
-              <Text
-                style={[
-                  styles.stepNumber,
-                  {
-                    color: colors.white,
-                  },
-                ]}
-              >
-                1
-              </Text>
+              <Text style={[styles.stepNumber, { color: colors.white }]}>1</Text>
             )}
           </View>
-
           <Text
             style={[
               styles.stepText,
-              {
-                color:
-                  step >= 1
-                    ? colors.text
-                    : colors.textMuted,
-              },
+              { color: step >= 1 ? colors.text : colors.textMuted },
             ]}
           >
-            Verify
+            Email
           </Text>
-
         </View>
-
 
         <View
           style={[
             styles.stepLine,
-            {
-              backgroundColor:
-                step >= 2
-                  ? colors.primary
-                  : colors.border,
-            },
+            { backgroundColor: step >= 2 ? colors.primary : colors.border },
           ]}
         />
 
-
+        {/* Step 2: OTP */}
         <View style={styles.stepItem}>
-
           <View
             style={[
               styles.stepCircle,
@@ -626,42 +583,65 @@ export default function ForgotPasswordScreen({ navigation }) {
             ]}
           >
             {step > 2 ? (
-              <Ionicons
-                name="checkmark"
-                size={16}
-                color={colors.white}
-              />
+              <Ionicons name="checkmark" size={16} color={colors.white} />
             ) : (
               <Text
                 style={[
                   styles.stepNumber,
-                  {
-                    color:
-                      step >= 2
-                        ? colors.white
-                        : colors.textMuted,
-                  },
+                  { color: step >= 2 ? colors.white : colors.textMuted },
                 ]}
               >
                 2
               </Text>
             )}
           </View>
-
           <Text
             style={[
               styles.stepText,
+              { color: step >= 2 ? colors.text : colors.textMuted },
+            ]}
+          >
+            OTP
+          </Text>
+        </View>
+
+        <View
+          style={[
+            styles.stepLine,
+            { backgroundColor: step >= 3 ? colors.primary : colors.border },
+          ]}
+        />
+
+        {/* Step 3: New Password */}
+        <View style={styles.stepItem}>
+          <View
+            style={[
+              styles.stepCircle,
               {
-                color:
-                  step >= 2
-                    ? colors.text
-                    : colors.textMuted,
+                backgroundColor:
+                  step >= 3
+                    ? colors.primary
+                    : colors.primarySoft,
               },
             ]}
           >
-            New Password
+            <Text
+              style={[
+                styles.stepNumber,
+                { color: step >= 3 ? colors.white : colors.textMuted },
+              ]}
+            >
+              3
+            </Text>
+          </View>
+          <Text
+            style={[
+              styles.stepText,
+              { color: step >= 3 ? colors.text : colors.textMuted },
+            ]}
+          >
+            Password
           </Text>
-
         </View>
 
       </View>
@@ -841,7 +821,7 @@ export default function ForgotPasswordScreen({ navigation }) {
 
   const renderContent = () => {
 
-    if (step === 3) {
+    if (step === 4) {
       return renderSuccess();
     }
 
@@ -981,6 +961,105 @@ export default function ForgotPasswordScreen({ navigation }) {
                 Back to Login
               </Text>
 
+            </Pressable>
+
+          </>
+
+        ) : step === 2 ? (
+
+          /* ── STEP 2: Enter OTP ── */
+          <>
+
+            <View style={styles.introBlock}>
+              <View
+                style={[
+                  styles.introIcon,
+                  { backgroundColor: colors.primarySoft },
+                ]}
+              >
+                <Ionicons
+                  name="keypad-outline"
+                  size={24}
+                  color={colors.primary}
+                />
+              </View>
+              <View style={styles.introTextContainer}>
+                <Text
+                  style={[
+                    styles.sectionTitle,
+                    { color: colors.text },
+                  ]}
+                >
+                  Enter your OTP
+                </Text>
+                <Text
+                  style={[
+                    styles.sectionSubtitle,
+                    { color: colors.textSecondary },
+                  ]}
+                >
+                  We sent a 6-digit code to{' '}
+                  <Text style={{ color: colors.primary, fontWeight: '600' }}>
+                    {email}
+                  </Text>
+                  . Check your inbox (and spam folder).
+                </Text>
+              </View>
+            </View>
+
+
+            {renderInput({
+              label: 'One-Time Password (OTP)',
+              value: otp,
+              onChangeText: text => {
+                setOtp(text.replace(/[^0-9]/g, ''));
+                if (errors.otp) clearError('otp');
+              },
+              placeholder: '6-digit OTP',
+              error: errors.otp,
+              keyboardType: 'number-pad',
+              maxLength: 6,
+              returnKeyType: 'done',
+              onSubmitEditing: handleVerifyOTP,
+            })}
+
+
+            <Pressable
+              onPress={handleVerifyOTP}
+              disabled={loading}
+              style={({ pressed }) => [
+                styles.primaryButton,
+                {
+                  backgroundColor: loading ? colors.primaryDark : colors.primary,
+                  opacity: pressed ? 0.9 : 1,
+                },
+              ]}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <>
+                  <Text style={styles.primaryButtonText}>Verify OTP</Text>
+                  <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
+                </>
+              )}
+            </Pressable>
+
+
+            {/* Resend OTP */}
+            <Pressable
+              onPress={() => {
+                setOtp('');
+                setErrors({});
+                setStep(1);
+              }}
+              style={styles.backButton}
+              disabled={loading}
+            >
+              <Ionicons name="refresh-outline" size={18} color={colors.primary} />
+              <Text style={[styles.backButtonText, { color: colors.primary }]}>
+                Resend OTP
+              </Text>
             </Pressable>
 
           </>

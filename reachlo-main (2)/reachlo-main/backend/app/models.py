@@ -361,3 +361,29 @@ class ChatMessage(Base):
     sender = relationship("User", back_populates="sent_messages", foreign_keys=[sender_id])
 
 
+class PasswordResetOTP(Base):
+    """
+    Stores one-time-use hashed OTPs for password reset.
+    - otp_hash: bcrypt hash of the 6-digit OTP (never store raw)
+    - expires_at: 10 minutes after creation
+    - used: True once the OTP has been successfully verified
+    - attempt_count: incremented on each failed attempt; locked after 5
+    - reset_token: short-lived token issued after OTP verification,
+      used to authorise the actual password change
+    - reset_token_expires_at: 5 minutes after OTP verification
+    """
+    __tablename__ = "password_reset_otps"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(10, collation="utf8mb4_0900_ai_ci"), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    otp_hash = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    used = Column(Boolean, default=False, nullable=False)
+    attempt_count = Column(Integer, default=0, nullable=False)
+    # Issued after OTP is verified — used to authorise the final password change
+    reset_token = Column(String(64), nullable=True, unique=True, index=True)
+    reset_token_expires_at = Column(DateTime, nullable=True)
+
+    user = relationship("User")
+

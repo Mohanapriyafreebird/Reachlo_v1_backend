@@ -387,7 +387,7 @@ export default function BuyerLoginScreen({ navigation }) {
                       />
                       <Text style={styles.rememberMeText}>Remember me</Text>
                     </Pressable>
-                    <Pressable onPress={() => navigation.navigate('ForgotPassword')} disabled={loading}>
+                    <Pressable onPress={() => navigation.navigate('ForgotPassword', { role: 'BUYER' })} disabled={loading}>
                       <Text style={styles.forgotText}>Forgot Password?</Text>
                     </Pressable>
                   </View>

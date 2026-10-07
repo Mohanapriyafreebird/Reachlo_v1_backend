@@ -3,7 +3,6 @@ import apiService from './apiService';
 class SellerAnalyticsService {
   async getAnalytics(period = '30') {
     try {
-      // Attempt to hit the real endpoint
       const data = await apiService.get(`/analytics/seller?period=${period}`);
       return data;
     } catch (error) {
@@ -13,45 +12,36 @@ class SellerAnalyticsService {
   }
 
   _getMockData(period) {
-    // Generate realistic mock data based on the period
-    let factor = 1;
-    if (period === '7') factor = 0.25;
-    if (period === '90') factor = 3;
-    if (period === '365') factor = 12;
+    const factorMap = { '7': 0.25, '30': 1, '90': 3, '365': 12 };
+    const f = factorMap[String(period)] ?? 1;
 
-    const baseEarnings = [4000, 3000, 5000, 7000, 6000, 9000, 11000];
-    const earningsHistory = baseEarnings.map((val, idx) => ({
-      label: `T-${7 - idx}`,
-      value: Math.floor(val * factor)
-    }));
+    const totalViews = Math.floor(15400 * f);
+    const totalLeads = Math.floor(642 * f);
 
-    const totalEarnings = Math.floor(45000 * factor);
-    
     return {
       overview: {
-        totalCampaigns: Math.floor(24 * (factor > 1 ? factor / 2 : 1)),
+        totalReach: totalViews,
+        totalLeads: totalLeads,
+        conversionRate: totalViews > 0
+          ? `${((totalLeads / totalViews) * 100).toFixed(1)}%`
+          : '0.0%',
         activeCampaigns: 4,
-        completedCampaigns: Math.floor(18 * (factor > 1 ? factor / 2 : 1)),
-        cancelledCampaigns: 2,
-        totalEarnings: totalEarnings,
-        totalReach: Math.floor(15400 * factor),
-        engagementRate: '12.4%',
-        conversionRate: '4.2%'
+        totalCampaigns: Math.floor(12 * (f > 1 ? Math.sqrt(f) : 1)),
+        aiGeneratedCount: 3,
       },
-      earnings: {
-        total: totalEarnings,
-        thisWeek: Math.floor(4500 * (period === '7' ? 1 : factor)),
-        thisMonth: totalEarnings,
-        fromCompleted: Math.floor(40000 * factor),
-        pending: Math.floor(5000 * factor),
-        history: earningsHistory
+      leadQuality: {
+        NEW:  Math.floor(210 * f),
+        HOT:  Math.floor(87  * f),
+        WARM: Math.floor(220 * f),
+        COLD: Math.floor(125 * f),
       },
-      campaignPerformance: {
-        bestPerforming: 'Summer Special Discount',
-        engagement: Math.floor(3450 * factor),
-        clicks: Math.floor(1200 * factor),
-        applications: Math.floor(45 * factor)
-      }
+      topCampaigns: [
+        { title: 'Summer Special Discount', leads: Math.floor(142 * f), views: Math.floor(3800 * f), status: 'ACTIVE'  },
+        { title: 'Diwali Mega Offer',        leads: Math.floor(98  * f), views: Math.floor(2400 * f), status: 'ACTIVE'  },
+        { title: 'New Year Deal',            leads: Math.floor(67  * f), views: Math.floor(1900 * f), status: 'EXPIRED' },
+        { title: 'Weekend Flash Sale',       leads: Math.floor(54  * f), views: Math.floor(1200 * f), status: 'ACTIVE'  },
+        { title: 'Referral Bonus Campaign',  leads: Math.floor(38  * f), views: Math.floor(980  * f), status: 'DRAFT'   },
+      ],
     };
   }
 }

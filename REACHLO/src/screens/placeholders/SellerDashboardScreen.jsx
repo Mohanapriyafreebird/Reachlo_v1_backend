@@ -15,6 +15,7 @@ import {
   Linking,
   PanResponder,
   FlatList,
+  Switch,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
@@ -1987,37 +1988,30 @@ export default function SellerDashboardScreen({ navigation }) {
                 </View>
               </View>
 
-              {/* Business Statistics Card */}
-              <View style={[styles.statsCardPremium, {
-                backgroundColor: isDarkMode ? '#111A2D' : '#FFFFFF',
-                borderColor: isDarkMode ? 'rgba(255,255,255,0.10)' : '#E8EDF5',
-                shadowColor: isDarkMode ? '#000' : '#64748B',
-              }]}>
-                <View style={styles.statItemPremium}>
-                  <View style={[styles.statIconBadge, { backgroundColor: theme.surfaceSecondary }]}>
-                    <Ionicons name="megaphone-outline" size={20} color={theme.sellerPrimary} />
-                  </View>
-                  <Text style={[styles.statValuePremium, { color: theme.text }]}>{activeCount}</Text>
-                  <Text style={[styles.statLabelPremium, { color: theme.textSecondary }]}>Campaigns</Text>
-                </View>
-                <View style={styles.statItemPremium}>
-                  <View style={[styles.statIconBadge, { backgroundColor: theme.surfaceSecondary }]}>
-                    <Ionicons name="eye-outline" size={20} color={theme.buyerPrimary} />
-                  </View>
-                  <Text style={[styles.statValuePremium, { color: theme.text }]}>{totalViews}</Text>
-                  <Text style={[styles.statLabelPremium, { color: theme.textSecondary }]}>Views</Text>
-                </View>
-              </View>
-
-              {/* Account Settings Section */}
+              {/* Personalization Section */}
               <View style={[styles.sellerSettingsCard, {
                 backgroundColor: isDarkMode ? '#111A2D' : '#FFFFFF',
                 borderColor: isDarkMode ? 'rgba(255,255,255,0.10)' : '#EEF2F8',
                 shadowColor: isDarkMode ? '#000' : '#64748B',
+                marginBottom: 16,
               }]}>
-                <Text style={[styles.sellerCardHeaderTitle, { color: isDarkMode ? '#AAB6CC' : '#64748B' }]}>ACCOUNT SETTINGS</Text>
+                <Text style={[styles.sellerCardHeaderTitle, { color: isDarkMode ? '#AAB6CC' : '#64748B' }]}>PERSONALIZATION</Text>
 
-                {/* Edit Profile */}
+                {/* Analytics Option */}
+                <Pressable
+                  onPress={() => navigation.navigate('SellerAnalytics')}
+                  style={({ pressed }) => [styles.sellerOptionRow, { borderBottomColor: isDarkMode ? 'rgba(255,255,255,0.07)' : '#F1F5F9' }, pressed && styles.sellerOptionPressed]}
+                >
+                  <View style={styles.sellerOptionLeft}>
+                    <View style={[styles.sellerOptionIconWrap, { backgroundColor: isDarkMode ? 'rgba(124,58,237,0.18)' : '#EDE9FE' }]}>
+                      <Ionicons name="bar-chart-outline" size={20} color={theme.sellerPrimary} />
+                    </View>
+                    <Text style={[styles.sellerOptionLabelText, { color: isDarkMode ? '#F8FAFF' : '#1E293B' }]}>Analytics</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#4A5A74' : '#CBD5E1'} />
+                </Pressable>
+
+                {/* Edit Personal Details */}
                 <Pressable
                   onPress={() => navigation.navigate('SellerEditProfile')}
                   style={({ pressed }) => [styles.sellerOptionRow, { borderBottomColor: isDarkMode ? 'rgba(255,255,255,0.07)' : '#F1F5F9' }, pressed && styles.sellerOptionPressed]}
@@ -2026,35 +2020,7 @@ export default function SellerDashboardScreen({ navigation }) {
                     <View style={[styles.sellerOptionIconWrap, { backgroundColor: isDarkMode ? 'rgba(124,58,237,0.18)' : '#EDE9FE' }]}>
                       <Ionicons name="person-outline" size={20} color={theme.sellerPrimary} />
                     </View>
-                    <Text style={[styles.sellerOptionLabelText, { color: isDarkMode ? '#F8FAFF' : '#1E293B' }]}>Edit Profile</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#4A5A74' : '#CBD5E1'} />
-                </Pressable>
-
-                {/* Settings */}
-                <Pressable
-                  onPress={() => navigation.navigate('SellerSettings')}
-                  style={({ pressed }) => [styles.sellerOptionRow, { borderBottomColor: isDarkMode ? 'rgba(255,255,255,0.07)' : '#F1F5F9' }, pressed && styles.sellerOptionPressed]}
-                >
-                  <View style={styles.sellerOptionLeft}>
-                    <View style={[styles.sellerOptionIconWrap, { backgroundColor: isDarkMode ? 'rgba(124,58,237,0.18)' : '#EDE9FE' }]}>
-                      <Ionicons name="settings-outline" size={20} color={theme.sellerPrimary} />
-                    </View>
-                    <Text style={[styles.sellerOptionLabelText, { color: isDarkMode ? '#F8FAFF' : '#1E293B' }]}>Settings</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#4A5A74' : '#CBD5E1'} />
-                </Pressable>
-
-                {/* Change Password */}
-                <Pressable
-                  onPress={() => navigation.navigate('ForgotPassword')}
-                  style={({ pressed }) => [styles.sellerOptionRow, { borderBottomColor: isDarkMode ? 'rgba(255,255,255,0.07)' : '#F1F5F9' }, pressed && styles.sellerOptionPressed]}
-                >
-                  <View style={styles.sellerOptionLeft}>
-                    <View style={[styles.sellerOptionIconWrap, { backgroundColor: isDarkMode ? 'rgba(124,58,237,0.18)' : '#EDE9FE' }]}>
-                      <Ionicons name="lock-closed-outline" size={20} color={theme.sellerPrimary} />
-                    </View>
-                    <Text style={[styles.sellerOptionLabelText, { color: isDarkMode ? '#F8FAFF' : '#1E293B' }]}>Change Password</Text>
+                    <Text style={[styles.sellerOptionLabelText, { color: isDarkMode ? '#F8FAFF' : '#1E293B' }]}>Edit Personal Details</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#4A5A74' : '#CBD5E1'} />
                 </Pressable>
@@ -2072,6 +2038,45 @@ export default function SellerDashboardScreen({ navigation }) {
                   </View>
                   <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#4A5A74' : '#CBD5E1'} />
                 </Pressable>
+                
+                {/* Change Password */}
+                <Pressable
+                  onPress={() => navigation.navigate('ForgotPassword')}
+                  style={({ pressed }) => [styles.sellerOptionRow, { borderBottomWidth: 0 }, pressed && styles.sellerOptionPressed]}
+                >
+                  <View style={styles.sellerOptionLeft}>
+                    <View style={[styles.sellerOptionIconWrap, { backgroundColor: isDarkMode ? 'rgba(124,58,237,0.18)' : '#EDE9FE' }]}>
+                      <Ionicons name="lock-closed-outline" size={20} color={theme.sellerPrimary} />
+                    </View>
+                    <Text style={[styles.sellerOptionLabelText, { color: isDarkMode ? '#F8FAFF' : '#1E293B' }]}>Change Password</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={isDarkMode ? '#4A5A74' : '#CBD5E1'} />
+                </Pressable>
+              </View>
+
+              {/* App Settings & Support Section */}
+              <View style={[styles.sellerSettingsCard, {
+                backgroundColor: isDarkMode ? '#111A2D' : '#FFFFFF',
+                borderColor: isDarkMode ? 'rgba(255,255,255,0.10)' : '#EEF2F8',
+                shadowColor: isDarkMode ? '#000' : '#64748B',
+              }]}>
+                <Text style={[styles.sellerCardHeaderTitle, { color: isDarkMode ? '#AAB6CC' : '#64748B' }]}>APP SETTINGS & SUPPORT</Text>
+
+                {/* Dark Mode Toggle */}
+                <View style={[styles.sellerOptionRow, { borderBottomColor: isDarkMode ? 'rgba(255,255,255,0.07)' : '#F1F5F9' }]}>
+                  <View style={styles.sellerOptionLeft}>
+                    <View style={[styles.sellerOptionIconWrap, { backgroundColor: isDarkMode ? 'rgba(124,58,237,0.18)' : '#EDE9FE' }]}>
+                      <Ionicons name={isDarkMode ? "moon-outline" : "sunny-outline"} size={20} color={theme.sellerPrimary} />
+                    </View>
+                    <Text style={[styles.sellerOptionLabelText, { color: isDarkMode ? '#F8FAFF' : '#1E293B' }]}>Dark Mode</Text>
+                  </View>
+                  <Switch
+                    value={isDarkMode}
+                    onValueChange={toggleDarkMode}
+                    trackColor={{ false: theme.switchTrackInactive, true: theme.sellerPrimary }}
+                    thumbColor={theme.switchThumb}
+                  />
+                </View>
 
                 {/* Help & Support */}
                 <Pressable

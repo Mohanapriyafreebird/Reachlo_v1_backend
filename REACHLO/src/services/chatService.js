@@ -1,6 +1,7 @@
 import apiService from './apiService';
 import API_CONFIG from '../config/apiConfig';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 
 const CHAT_RETENTION_KEY = 'reachlo_chat_retention';
 const CHAT_CACHE_KEY_PREFIX = 'reachlo_chat_';
@@ -104,14 +105,18 @@ class ChatService {
     if (this.ws || this.isConnected) return;
 
     try {
-      const token = await AsyncStorage.getItem('reachlo_token');
+      let token = await SecureStore.getItemAsync('token');
+      if (!token) {
+        token = await SecureStore.getItemAsync('reachlo_token');
+      }
       if (!token) return;
 
-      const wsUrl = `${API_CONFIG.WS_BASE_URL}/chat/ws?token=${token}`;
+      const wsUrl = `${API_CONFIG.WS_BASE_URL}/chat/ws`;
       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = () => {
-        console.log('[ChatService] WS Connected');
+        console.log('[ChatService] WS Connected, sending AUTH frame');
+        this.ws.send(JSON.stringify({ type: 'AUTH', token }));
         this.isConnected = true;
       };
 

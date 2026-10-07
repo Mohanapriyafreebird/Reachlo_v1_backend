@@ -1,15 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_
+import asyncio
+from datetime import datetime
 from typing import List
+
+from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
+from sqlalchemy import or_
+from sqlalchemy.orm import Session, joinedload
+
 from app.database import get_db
 from app.models import User, Campaign, Lead, ChatThread, ChatMessage, Business
 from app.schemas import ChatThreadCreate, ChatMessageCreate, ChatMessageResponse, ChatThreadResponse, UnreadCountResponse
 from app.dependencies import get_current_user, get_ws_current_user
 from app.utils.push_notifications import send_new_lead_notification, send_new_message_to_buyer, send_new_message_to_seller
 from app.utils.websocket_manager import manager
-from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
-from datetime import datetime
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
@@ -310,36 +312,62 @@ def get_unread_count(db: Session = Depends(get_db), current_user: User = Depends
 @router.websocket("/ws")
 async def websocket_endpoint(
     websocket: WebSocket,
-    token: str,
     db: Session = Depends(get_db)
 ):
+    await websocket.accept()
+
+    # Step 1: Wait for JSON authentication frame within 10 seconds
+    try:
+        auth_data = await asyncio.wait_for(websocket.receive_json(), timeout=10.0)
+    except Exception:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Auth timeout or invalid format")
+        return
+
+    if not isinstance(auth_data, dict) or auth_data.get("type") != "AUTH" or not auth_data.get("token"):
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Authentication frame required")
+        return
+
+    # Step 2: Validate JWT token and identify user
+    token = auth_data.get("token")
     try:
         user = await get_ws_current_user(token, db)
     except Exception:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid authentication token")
         return
 
+    # Send confirmation frame back to caller
+    await websocket.send_json({"type": "AUTH_SUCCESS", "user_id": user.id})
+
+    # Register active WebSocket connection
     await manager.connect(websocket, user.id)
+
     try:
         while True:
-            # We can accept incoming messages via WS, but for now we'll just listen to keep connection open
-            # and allow the client to send read receipts or typing indicators if needed.
             data = await websocket.receive_json()
-            if data.get("type") == "TYPING":
-                thread_id = data.get("thread_id")
-                # broadcast typing event to the other party
+            if not isinstance(data, dict):
+                continue
+
+            msg_type = data.get("type")
+            thread_id = data.get("thread_id")
+
+            # Step 3: Thread Ownership Validation (Broken Access Control / IDOR Prevention)
+            if thread_id:
                 thread = db.query(ChatThread).filter(ChatThread.id == thread_id).first()
-                if thread:
+                if not thread or (user.id != thread.buyer_id and user.id != thread.seller_id):
+                    await websocket.send_json({
+                        "type": "ERROR",
+                        "message": "Unauthorized access to thread"
+                    })
+                    continue
+
+                if msg_type == "TYPING":
                     target_id = thread.seller_id if user.id == thread.buyer_id else thread.buyer_id
                     await manager.send_personal_message({
                         "type": "TYPING",
                         "thread_id": thread_id,
                         "user_id": user.id
                     }, target_id)
-            elif data.get("type") == "MARK_READ":
-                thread_id = data.get("thread_id")
-                thread = db.query(ChatThread).filter(ChatThread.id == thread_id).first()
-                if thread:
+                elif msg_type == "MARK_READ":
                     if user.role == "BUYER":
                         thread.buyer_unread_count = 0
                     else:

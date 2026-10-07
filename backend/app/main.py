@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
 from app.migrations import run_migrations
+from app.config import settings
 from app.routers import auth, campaigns, leads, businesses, upload, chat, feedback, analytics, wallet
 from app.routers import ai
 
@@ -23,13 +24,22 @@ import os
 os.makedirs("uploads", exist_ok=True)
 os.makedirs("uploads/ai-thumbnails", exist_ok=True)
 
+# Parse allowed origins from settings (comma-separated env var)
+# Dev:  http://localhost:3000, http://localhost:8081  (default)
+# Prod: set ALLOWED_ORIGINS=https://reachlo.in,https://www.reachlo.in in .env
+_origins: list[str] = [
+    origin.strip()
+    for origin in settings.ALLOWED_ORIGINS.split(",")
+    if origin.strip()
+]
+
 # Configure CORS so mobile devices and web clients can access the APIs
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With"],
 )
 
 # Mount static files for uploads (including AI-generated thumbnails)
