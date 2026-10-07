@@ -206,6 +206,48 @@ def get_nearby_campaigns(
 
 
 
+_PLACES_DAILY_LIMIT = 50       # requests per user per day
+_PLACES_DAILY_WINDOW = 86400   # 24 hours in seconds
+_places_rate_limit_store: dict = {}
+_places_rate_limit_lock = threading.Lock()
+
+
+def _check_places_rate_limit(user_id: str):
+    """Enforce per-user 50 requests/day rate limit on Google Places API proxy."""
+    now = time.time()
+    
+    # Primary: Redis atomic rate limiter
+    if _redis_client:
+        try:
+            rl_key = f"rl:places:{user_id}"
+            cnt = _redis_client.incr(rl_key)
+            if cnt == 1:
+                _redis_client.expire(rl_key, _PLACES_DAILY_WINDOW)
+            if int(cnt) > _PLACES_DAILY_LIMIT:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Daily rate limit exceeded for Google Places API (50 requests/day)."
+                )
+            return
+        except HTTPException:
+            raise
+        except Exception:
+            pass  # fallback to in-memory store if Redis connection fails
+
+    # Secondary: In-memory fallback
+    with _places_rate_limit_lock:
+        entry = _places_rate_limit_store.get(user_id)
+        if not entry or (now - entry.get('start', 0)) > _PLACES_DAILY_WINDOW:
+            _places_rate_limit_store[user_id] = {'start': now, 'count': 1}
+        else:
+            if entry.get('count', 0) >= _PLACES_DAILY_LIMIT:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Daily rate limit exceeded for Google Places API (50 requests/day)."
+                )
+            entry['count'] = entry.get('count', 0) + 1
+
+
 @router.get("/places/autocomplete")
 def places_autocomplete(
     request: Request,
@@ -214,52 +256,20 @@ def places_autocomplete(
     latitude: Optional[float] = None,
     longitude: Optional[float] = None,
     radius: Optional[int] = Query(None, description="Bias results within this radius in meters"),
+    current_user: User = Depends(get_current_user),
 ):
-    """Proxy endpoint for Google Places Autocomplete. Returns predictions as provided by Google."""
+    """Proxy endpoint for Google Places Autocomplete. Requires auth & 50 req/day per user rate limit."""
     if not settings.GOOGLE_PLACES_API_KEY:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Google Places API key not configured on server.")
-    # Rate limiting by client IP
-    client_ip = "unknown"
-    try:
-        client_ip = request.client.host or "unknown"
-    except Exception:
-        pass
 
-    now = time.time()
-    # First try Redis-backed rate limiting (atomic)
-    if _redis_client:
-        try:
-            rl_key = f"rl:{client_ip}"
-            cnt = _redis_client.incr(rl_key)
-            if cnt == 1:
-                _redis_client.expire(rl_key, _RATE_WINDOW)
-            if int(cnt) > _RATE_LIMIT:
-                raise HTTPException(status_code=429, detail="Rate limit exceeded for Places Autocomplete")
-        except HTTPException:
-            raise
-        except Exception:
-            # fallback to in-memory
-            with _rate_limit_lock:
-                entry = _rate_limit_store.get(client_ip)
-                if not entry or now - entry.get('start', 0) > _RATE_WINDOW:
-                    _rate_limit_store[client_ip] = {'start': now, 'count': 1}
-                else:
-                    if entry.get('count', 0) >= _RATE_LIMIT:
-                        raise HTTPException(status_code=429, detail="Rate limit exceeded for Places Autocomplete")
-                    entry['count'] = entry.get('count', 0) + 1
-    else:
-        with _rate_limit_lock:
-            entry = _rate_limit_store.get(client_ip)
-            if not entry or now - entry.get('start', 0) > _RATE_WINDOW:
-                _rate_limit_store[client_ip] = {'start': now, 'count': 1}
-            else:
-                if entry.get('count', 0) >= _RATE_LIMIT:
-                    raise HTTPException(status_code=429, detail="Rate limit exceeded for Places Autocomplete")
-                entry['count'] = entry.get('count', 0) + 1
+    # Enforce per-user 50 req/day rate limit
+    _check_places_rate_limit(current_user.id)
 
     loc = None
     if latitude is not None and longitude is not None:
         loc = (latitude, longitude)
+
+    now = time.time()
 
     # Build cache key
     cache_key = f"pa:{input}|{sessiontoken or ''}|{latitude or ''}|{longitude or ''}|{radius or ''}"
@@ -301,10 +311,16 @@ def places_autocomplete(
 
 
 @router.get("/places/details")
-def places_details(place_id: str = Query(..., min_length=1)):
-    """Return Place Details for a given Google Place ID (proxy to Place Details API)."""
+def places_details(
+    place_id: str = Query(..., min_length=1),
+    current_user: User = Depends(get_current_user),
+):
+    """Return Place Details for a given Google Place ID (proxy to Place Details API). Requires auth & 50 req/day per user rate limit."""
     if not settings.GOOGLE_PLACES_API_KEY:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Google Places API key not configured on server.")
+
+    # Enforce per-user 50 req/day rate limit
+    _check_places_rate_limit(current_user.id)
 
     details = get_place_details(place_id)
     if details is None:
