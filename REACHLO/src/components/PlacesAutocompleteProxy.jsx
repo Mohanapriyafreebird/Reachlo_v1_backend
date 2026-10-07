@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { View, TextInput, FlatList, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { API_CONFIG } from '../config/apiConfig'
 
 /**
@@ -13,6 +14,16 @@ export default function PlacesAutocompleteProxy({ onPlaceSelected, authToken = n
   const [loading, setLoading] = useState(false)
   const debounceRef = useRef(null)
   const sessionTokenRef = useRef(String(Date.now()))
+
+  async function getAuthHeader() {
+    let token = authToken
+    if (!token) {
+      try {
+        token = await AsyncStorage.getItem('reachlo_token')
+      } catch (e) {}
+    }
+    return token ? { Authorization: `Bearer ${token}` } : {}
+  }
 
   useEffect(() => {
     if (!q || q.length < 2) {
@@ -33,10 +44,11 @@ export default function PlacesAutocompleteProxy({ onPlaceSelected, authToken = n
   async function fetchPredictions(text) {
     setLoading(true)
     try {
+      const headers = await getAuthHeader()
       const url = `${API_CONFIG.BASE_URL}/campaigns/places/autocomplete?input=${encodeURIComponent(text)}&sessiontoken=${sessionTokenRef.current}`
       const resp = await fetch(url, {
         method: 'GET',
-        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+        headers,
       })
       if (!resp.ok) {
         setPredictions([])
@@ -56,8 +68,9 @@ export default function PlacesAutocompleteProxy({ onPlaceSelected, authToken = n
     // pred.place_id expected
     if (!pred || !pred.place_id) return
     try {
+      const headers = await getAuthHeader()
       const url = `${API_CONFIG.BASE_URL}/campaigns/places/details?place_id=${encodeURIComponent(pred.place_id)}`
-      const resp = await fetch(url, { method: 'GET', headers: authToken ? { Authorization: `Bearer ${authToken}` } : {} })
+      const resp = await fetch(url, { method: 'GET', headers })
       if (!resp.ok) return
       const details = await resp.json()
       if (onPlaceSelected) onPlaceSelected(details)
