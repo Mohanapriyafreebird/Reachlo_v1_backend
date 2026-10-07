@@ -3153,16 +3153,15 @@ export default function DiscoveryFeedScreen() {
 
   const renderProfile = () => {
 
-    const profileOptions = [
+    const personalizationOptions = [
       {
         icon: 'person-outline',
-        title: 'Edit Profile',
+        title: 'Edit Personal Details',
         onPress: () =>
           navigation.navigate(
             'SellerEditProfile'
           ),
       },
-
       {
         icon: 'lock-closed-outline',
         title: 'Change Password',
@@ -3171,7 +3170,9 @@ export default function DiscoveryFeedScreen() {
             'SellerChangePasswordScreen'
           ),
       },
+    ];
 
+    const appSettingsOptions = [
       {
         icon: 'help-buoy-outline',
         title: 'Help & Support',
@@ -3181,7 +3182,6 @@ export default function DiscoveryFeedScreen() {
             { themeRole: 'BUYER' }
           ),
       },
-
       {
         icon: 'shield-checkmark-outline',
         title: 'Privacy Policy',
@@ -3191,7 +3191,6 @@ export default function DiscoveryFeedScreen() {
             { themeRole: 'BUYER' }
           ),
       },
-
       {
         icon: 'information-circle-outline',
         title: 'About REACHLO',
@@ -3201,7 +3200,6 @@ export default function DiscoveryFeedScreen() {
             { themeRole: 'BUYER' }
           ),
       },
-
       {
         icon: 'star-outline',
         title: 'Rate REACHLO',
@@ -3363,112 +3361,85 @@ export default function DiscoveryFeedScreen() {
         </View>
 
 
-        {/* Settings */}
-
+        {/* Personalization Section */}
         <View
           style={[
             styles.profileSettingsCard,
             {
-              backgroundColor:
-                palette.surface,
-
-              borderColor:
-                palette.border,
+              backgroundColor: palette.surface,
+              borderColor: palette.border,
+              marginBottom: 16,
             },
           ]}
         >
-
-          <Text
-            style={[
-              styles.profileSectionTitle,
-              {
-                color:
-                  palette.text,
-              },
-            ]}
-          >
-            ACCOUNT SETTINGS
+          <Text style={[styles.profileSectionTitle, { color: palette.text }]}>
+            PERSONALIZATION
           </Text>
 
-
-          {profileOptions.map(
+          {personalizationOptions.map(
             option => (
-
               <Pressable
-                key={
-                  option.title
-                }
-                onPress={
-                  option.onPress
-                }
+                key={option.title}
+                onPress={option.onPress}
                 style={({ pressed }) => [
                   styles.profileOption,
                   {
-                    borderBottomColor:
-                      palette.border,
-
-                    backgroundColor:
-                      pressed
-                        ? palette.surfaceSecondary
-                        : 'transparent',
+                    borderBottomColor: palette.border,
+                    backgroundColor: pressed ? palette.surfaceSecondary : 'transparent',
                   },
                 ]}
               >
-
-                <View
-                  style={
-                    styles.profileOptionLeft
-                  }
-                >
-
-                  <View
-                    style={[
-                      styles.profileOptionIcon,
-                      {
-                        backgroundColor:
-                          palette.primarySoft,
-                      },
-                    ]}
-                  >
-
-                    <Ionicons
-                      name={
-                        option.icon
-                      }
-                      size={20}
-                      color={
-                        palette.primary
-                      }
-                    />
-
+                <View style={styles.profileOptionLeft}>
+                  <View style={[styles.profileOptionIcon, { backgroundColor: palette.primarySoft }]}>
+                    <Ionicons name={option.icon} size={20} color={palette.primary} />
                   </View>
-
-
-                  <Text
-                    style={[
-                      styles.profileOptionText,
-                      {
-                        color:
-                          palette.text,
-                      },
-                    ]}
-                  >
+                  <Text style={[styles.profileOptionText, { color: palette.text }]}>
                     {option.title}
                   </Text>
-
                 </View>
-
-
-                <Ionicons
-                  name="chevron-forward"
-                  size={19}
-                  color={
-                    palette.textTertiary
-                  }
-                />
-
+                <Ionicons name="chevron-forward" size={19} color={palette.textTertiary} />
               </Pressable>
+            )
+          )}
+        </View>
 
+        {/* App Settings & Support Section */}
+        <View
+          style={[
+            styles.profileSettingsCard,
+            {
+              backgroundColor: palette.surface,
+              borderColor: palette.border,
+            },
+          ]}
+        >
+          <Text style={[styles.profileSectionTitle, { color: palette.text }]}>
+            APP SETTINGS & SUPPORT
+          </Text>
+
+          {appSettingsOptions.map(
+            option => (
+              <Pressable
+                key={option.title}
+                onPress={option.onPress}
+                style={({ pressed }) => [
+                  styles.profileOption,
+                  {
+                    borderBottomColor: palette.border,
+                    backgroundColor: pressed ? palette.surfaceSecondary : 'transparent',
+                  },
+                ]}
+              >
+                <View style={styles.profileOptionLeft}>
+                  <View style={[styles.profileOptionIcon, { backgroundColor: palette.primarySoft }]}>
+                    <Ionicons name={option.icon} size={20} color={palette.primary} />
+                  </View>
+                  <Text style={[styles.profileOptionText, { color: palette.text }]}>
+                    {option.title}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={19} color={palette.textTertiary} />
+              </Pressable>
             )
           )}
 
