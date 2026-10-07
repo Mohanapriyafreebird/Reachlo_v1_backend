@@ -240,9 +240,10 @@ def generate_ai_campaign(
             existing_visual_style=existing_visual_style,
         )
     except Exception as e:
+        print(f"[ERROR] AI campaign generation failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"AI generation failed: {str(e)}",
+            detail="AI campaign generation service is currently unavailable. Please try again.",
         )
 
     # Extract campaign content from structured response

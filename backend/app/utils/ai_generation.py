@@ -745,18 +745,20 @@ def _call_gemini(
     if system_instruction:
         payload["systemInstruction"] = {"parts": [{"text": system_instruction}]}
 
+    headers = {
+        "Content-Type": "application/json",
+        "x-goog-api-key": api_key,
+    }
+
     last_error = None
     
     # Try the whole list of models up to 3 times
     for attempt in range(3):
         for model in models_to_try:
-            url = (
-                "https://generativelanguage.googleapis.com/v1beta/models/"
-                f"{model}:generateContent?key={api_key}"
-            )
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
             
             try:
-                response = requests.post(url, json=payload, timeout=180)
+                response = requests.post(url, json=payload, headers=headers, timeout=30)
                 if response.status_code == 200:
                     data = response.json()
                     text = data["candidates"][0]["content"]["parts"][0]["text"]
@@ -768,23 +770,22 @@ def _call_gemini(
                 status_code = getattr(e.response, "status_code", None) if getattr(e, "response", None) is not None else None
                 # If it's a 4xx error that is NOT 429, skip to next model
                 if status_code and 400 <= status_code < 500 and status_code != 429:
-                    print(f"[WARN] Non-retryable error on {model}: {e} (Status: {status_code})")
+                    print(f"[WARN] Non-retryable error on {model} (Status: {status_code})")
                     continue
                 
-                print(f"[WARN] Attempt {attempt + 1} failed for {model}: {e}. Trying next model...")
+                print(f"[WARN] Attempt {attempt + 1} failed for {model} (Status: {status_code}). Trying next model...")
                 continue
             except Exception as e:
                 last_error = e
-                print(f"[WARN] Unexpected error on {model}: {e}")
+                print(f"[WARN] Unexpected error on {model}: {type(e).__name__}")
                 continue
                 
         # If we exhausted all models in this attempt, wait before retrying the list
         if attempt < 2:
-            wait_time = 5 * (attempt + 1)
-            print(f"[WARN] All models failed on attempt {attempt + 1}. Retrying in {wait_time}s...")
+            wait_time = 3 * (attempt + 1)
             time.sleep(wait_time)
             
-    raise ValueError(f"AI generation failed after exhausting all models and retries. Last error: {last_error}")
+    raise ValueError("AI generation service is currently unavailable. Please try again.")
 
 
 def _extract_json(text: str) -> dict:
@@ -2134,4 +2135,4 @@ Return exactly this JSON structure (no markdown, no prose outside JSON):
     except Exception as e:
         print(f"[WARN] Image review failed: {e}")
         # Default fallback to pass if reviewer fails
-        return {"score": 80, "feedback": f"Review failed: {str(e)}", "prompt_adjustment": ""}
+        return {"score": 80, "feedback": "Quality review unavailable, defaulting to standard score.", "prompt_adjustment": ""}
