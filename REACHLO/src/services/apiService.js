@@ -1,7 +1,7 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import API_CONFIG from '../config/apiConfig';
 
-const TOKEN_KEY = 'reachlo_token';
+const TOKEN_KEY = 'token';
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -14,12 +14,15 @@ class ApiService {
     };
 
     try {
-      const token = await AsyncStorage.getItem(TOKEN_KEY);
+      let token = await SecureStore.getItemAsync(TOKEN_KEY);
+      if (!token) {
+        token = await SecureStore.getItemAsync('reachlo_token');
+      }
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
     } catch (e) {
-      console.warn('Failed to load token from AsyncStorage', e);
+      console.warn('Failed to load token from SecureStore', e);
     }
 
     return headers;
