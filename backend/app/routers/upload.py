@@ -204,9 +204,16 @@ async def upload_image(
       - Stored on S3 / Cloudinary / local depending on configuration.
     """
     # ── 1. Read file in chunks, enforce 5 MB hard limit ─────────────────────
+    # NOTE: newer FastAPI/Starlette versions removed __aiter__ from UploadFile,
+    # so `async for chunk in file` raises TypeError.  Use the underlying
+    # SpooledTemporaryFile (file.file) with a synchronous chunk-read instead.
+    CHUNK_SIZE = 1024 * 1024  # 1 MB per iteration
     chunks: list[bytes] = []
     total_size = 0
-    async for chunk in file:
+    while True:
+        chunk = await file.read(CHUNK_SIZE)
+        if not chunk:
+            break
         total_size += len(chunk)
         if total_size > MAX_FILE_SIZE_BYTES:
             raise HTTPException(
